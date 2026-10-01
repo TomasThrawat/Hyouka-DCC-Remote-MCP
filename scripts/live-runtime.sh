@@ -125,33 +125,28 @@ wait_for_local_ready blender 10000
 wait_for_local_ready krita 10001
 echo "DCC_LOCAL_SERVERS_STARTED=PASS"
 
-LOCAL_TUNNEL_ROOT="$RUNNER_TEMP/localtunnel"
-LOCAL_TUNNEL_BIN="$LOCAL_TUNNEL_ROOT/node_modules/.bin/lt"
-
-install_localtunnel() {
-  command -v npm >/dev/null 2>&1
-  rm -rf "$LOCAL_TUNNEL_ROOT"
-  mkdir -p "$LOCAL_TUNNEL_ROOT"
-  npm install --prefix "$LOCAL_TUNNEL_ROOT" --no-audit --no-fund localtunnel@2.0.2
-  test -x "$LOCAL_TUNNEL_BIN"
-  echo "LOCALTUNNEL_READY=$LOCAL_TUNNEL_BIN"
-}
-
-install_localtunnel
-
 start_tunnel() {
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   rm -f "$log"
-  "$LOCAL_TUNNEL_BIN" --port "$port" --local-host 127.0.0.1 >"$log" 2>&1 &
+  ssh -p 443 \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o LogLevel=ERROR \
+    -o ExitOnForwardFailure=yes \
+    -o ConnectTimeout=15 \
+    -o ServerAliveInterval=20 \
+    -o ServerAliveCountMax=3 \
+    -R0:localhost:$port \
+    free.pinggy.io >"$log" 2>&1 &
   echo $! >"$RUNNER_TEMP/$name-tunnel.pid"
 }
 
 get_tunnel_url() {
   local name="$1"
   local log="$RUNNER_TEMP/$name-tunnel.log"
-  grep -Eo 'https://[A-Za-z0-9.-]+\.loca\.lt' "$log" | tail -1 || true
+  grep -Eo 'https://[A-Za-z0-9.-]+\\.(pinggy\\.link|pinggy-free\\.link)' "$log" | tail -1 || true
 }
 
 probe_public() {
