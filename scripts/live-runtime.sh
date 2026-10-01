@@ -54,7 +54,7 @@ tar -xJf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender" --strip-compone
 "$RUNNER_TEMP/blender/blender" --version
 
 echo "== Install official DCC MCP Krita adapter =="
-dcc-mcp-krita install --dcc-path "$(command -v krita)" --yes
+"$RUNNER_TEMP/dcc-venv/bin/dcc-mcp-krita" install --dcc-path "$(command -v krita)" --yes
 
 python3 - <<'PY'
 from configparser import ConfigParser
