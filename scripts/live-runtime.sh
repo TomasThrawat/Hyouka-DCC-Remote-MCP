@@ -125,12 +125,26 @@ wait_for_local_ready blender 10000
 wait_for_local_ready krita 10001
 echo "DCC_LOCAL_SERVERS_STARTED=PASS"
 
+LOCAL_TUNNEL_ROOT="$RUNNER_TEMP/localtunnel"
+LOCAL_TUNNEL_BIN="$LOCAL_TUNNEL_ROOT/node_modules/.bin/lt"
+
+install_localtunnel() {
+  command -v npm >/dev/null 2>&1
+  rm -rf "$LOCAL_TUNNEL_ROOT"
+  mkdir -p "$LOCAL_TUNNEL_ROOT"
+  npm install --prefix "$LOCAL_TUNNEL_ROOT" --no-audit --no-fund localtunnel@2.0.2
+  test -x "$LOCAL_TUNNEL_BIN"
+  echo "LOCALTUNNEL_READY=$LOCAL_TUNNEL_BIN"
+}
+
+install_localtunnel
+
 start_tunnel() {
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   rm -f "$log"
-  npx --yes localtunnel@2.0.2 --port "$port" --local-host 127.0.0.1 >"$log" 2>&1 &
+  "$LOCAL_TUNNEL_BIN" --port "$port" --local-host 127.0.0.1 >"$log" 2>&1 &
   echo $! >"$RUNNER_TEMP/$name-tunnel.pid"
 }
 
@@ -202,8 +216,7 @@ wait_for_public_ready() {
   local port="$2"
   local pid_file="$RUNNER_TEMP/$name-tunnel.pid"
 
-  local failures=0
-  for _ in $(seq 1 60); do
+  for _ in $(seq 1 90); do
     local url
     local status
     url="$(get_tunnel_url "$name")"
@@ -214,16 +227,12 @@ wait_for_public_ready() {
         printf '%s' "$url"
         return 0
       fi
-      failures=$((failures + 1))
-    else
-      failures=$((failures + 1))
     fi
 
-    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null || [ "$failures" -ge 5 ]; then
-      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_TUNNEL_RESTART_DURING_BOOT failures=$failures" >&2
-      kill "$(cat "$pid_file")" 2>/dev/null || true
+    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_TUNNEL_PROCESS_DIED" >&2
+      cat "$RUNNER_TEMP/$name-tunnel.log" >&2 || true
       start_tunnel "$name" "$port"
-      failures=0
     fi
     sleep 2
   done
