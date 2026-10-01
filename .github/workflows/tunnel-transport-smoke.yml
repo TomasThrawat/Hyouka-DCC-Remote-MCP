@@ -1,0 +1,71 @@
+name: Tunnel Transport Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/tunnel-transport-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Start local HTTP targets
+        run: |
+          set -Eeuo pipefail
+          python3 -m http.server 18000 --bind 127.0.0.1 >"$RUNNER_TEMP/target1.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/target1.pid"
+          python3 -m http.server 18001 --bind 127.0.0.1 >"$RUNNER_TEMP/target2.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/target2.pid"
+          for _ in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:18000 >/dev/null &&             curl -fsS http://127.0.0.1:18001 >/dev/null && exit 0
+            sleep 1
+          done
+          exit 1
+
+      - name: Test localhost.run transport
+        run: |
+          set -Eeuo pipefail
+          rm -f "$RUNNER_TEMP/local.log"
+          ssh -NT             -o StrictHostKeyChecking=no             -o UserKnownHostsFile=/dev/null             -o LogLevel=ERROR             -o ExitOnForwardFailure=yes             -o ConnectTimeout=15             -o ServerAliveInterval=20             -o ServerAliveCountMax=3             -R 80:127.0.0.1:18000             nokey@localhost.run >"$RUNNER_TEMP/local.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/local.pid"
+          for _ in $(seq 1 60); do
+            URL="$(grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life' "$RUNNER_TEMP/local.log" | tail -1 || true)"
+            if [ -n "$URL" ]; then
+              CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$URL" || true)"
+              echo "LOCALHOST_RUN_URL=$URL"
+              echo "LOCALHOST_RUN_STATUS=$CODE"
+              [ "$CODE" = "200" ] && exit 0
+            fi
+            sleep 2
+          done
+          echo "=== localhost.run log ==="
+          cat "$RUNNER_TEMP/local.log" || true
+          exit 1
+
+      - name: Test Pinggy transport
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          rm -f "$RUNNER_TEMP/pinggy.log"
+          ssh -p 443             -o StrictHostKeyChecking=no             -o UserKnownHostsFile=/dev/null             -o LogLevel=ERROR             -o ExitOnForwardFailure=yes             -o ConnectTimeout=15             -o ServerAliveInterval=20             -o ServerAliveCountMax=3             -R0:localhost:18001             free.pinggy.io >"$RUNNER_TEMP/pinggy.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/pinggy.pid"
+          for _ in $(seq 1 60); do
+            URL="$(grep -Eo 'https://[^[:space:]]+\.(pinggy\.link|pinggy-free\.link)' "$RUNNER_TEMP/pinggy.log" | tail -1 || true)"
+            if [ -n "$URL" ]; then
+              CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$URL" || true)"
+              echo "PINGGY_URL=$URL"
+              echo "PINGGY_STATUS=$CODE"
+              [ "$CODE" = "200" ] && exit 0
+            fi
+            sleep 2
+          done
+          echo "=== Pinggy log ==="
+          cat "$RUNNER_TEMP/pinggy.log" || true
+          exit 1
