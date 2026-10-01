@@ -9,7 +9,7 @@ python3 --version
 uname -a
 
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends   ca-certificates curl git python3-venv python3-pip xz-utils openssh-client   xvfb dbus-x11 krita python3-pyqt5 x11-xkb-utils xkeyboard-config   libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0   libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3   libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0   libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1   libxkbcommon-x11-0 libegl1 fonts-dejavu
+sudo apt-get install -y --no-install-recommends   ca-certificates curl git python3-venv python3-pip xz-utils openssh-client   xvfb dbus-x11 krita python3-pyqt5 x11-xkb-utils   libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0   libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3   libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0   libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1   libxkbcommon-x11-0 libegl1 fonts-dejavu
 sudo rm -rf /var/lib/apt/lists/*
 
 python3 - <<'PY'
@@ -33,9 +33,7 @@ REF="5019f58852176aeeb11805126360ff749cd70dce"
 mkdir -p "$HOME/.local/share/krita/pykrita/kritamcp" "$HOME/.config"
 curl -fL --retry 5 --retry-all-errors   "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp/__init__.py"   -o "$HOME/.local/share/krita/pykrita/kritamcp/__init__.py"
 curl -fL --retry 5 --retry-all-errors   "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp.desktop"   -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
-printf "[python]
-enable_kritamcp=true
-" > "$HOME/.config/kritarc"
+printf "[python]\nenable_kritamcp=true\n" > "$HOME/.config/kritarc"
 
 export DCC_PYTHON_PATH="$RUNNER_TEMP/dcc-python"
 export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
