@@ -109,4 +109,18 @@ jobs:
           texts = [c.get("text", "") for c in inv.get("content", [])]
           inventory_text = "\n".join(texts)
           print("GODOT_MCP_INVENTORY=" + inventory_text)
+
+          blender_status = rpc("tools/call", 4, {
+              "name": "mcp_blender-mcp__dcc_diagnostics__process_status",
+              "arguments": {},
+          })
+          print("BLENDER_PROCESS_STATUS=" + json.dumps(blender_status))
+          assert any(c.get("text") for c in blender_status.get("content", []))
+
+          krita_health = rpc("tools/call", 5, {
+              "name": "mcp_krita-mcp__krita_health",
+              "arguments": {},
+          })
+          print("KRITA_HEALTH=" + json.dumps(krita_health))
+          assert any(c.get("text") for c in krita_health.get("content", []))
           PY
