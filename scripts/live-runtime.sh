@@ -54,8 +54,7 @@ tar -xJf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender" --strip-compone
 "$RUNNER_TEMP/blender/blender" --version
 
 echo "== Install official DCC MCP Krita adapter =="
-timeout 300s "$RUNNER_TEMP/dcc-venv/bin/dcc-mcp-krita" install --dcc-path "$(command -v krita)" --yes
-echo "KRITA_ADAPTER_INSTALL=PASS"
+"$RUNNER_TEMP/dcc-venv/bin/dcc-mcp-krita" install --dcc-path "$(command -v krita)" --yes
 
 python3 - <<'PY'
 from configparser import ConfigParser
@@ -92,14 +91,12 @@ export DCC_MCP_INNER_PORT=10002
   > "$RUNNER_TEMP/blender.log" 2>&1 &
 echo $! > "$RUNNER_TEMP/blender.pid"
 
-echo "BLENDER_START=BEGIN"
 for _ in $(seq 1 120); do
   grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log" && break
   kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender.log"; exit 1; }
   sleep 1
 done
 grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log"
-echo "BLENDER_START=PASS"
 
 export DISPLAY=:99
 export PORT=10001
@@ -109,14 +106,12 @@ env -u PYTHONPATH "$RUNNER_TEMP/dcc-venv/bin/python" "$GITHUB_WORKSPACE/krita/en
   > "$RUNNER_TEMP/krita.log" 2>&1 &
 echo $! > "$RUNNER_TEMP/krita.pid"
 
-echo "KRITA_START=BEGIN"
 for _ in $(seq 1 180); do
   grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log" && break
   kill -0 "$(cat "$RUNNER_TEMP/krita.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita.log"; exit 1; }
   sleep 1
 done
 grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log"
-echo "KRITA_START=PASS"
 
 "$RUNNER_TEMP/dcc-venv/bin/python" - <<'PY'
 import asyncio
@@ -136,19 +131,12 @@ asyncio.run(main())
 PY
 
 start_tunnel() {
+  echo "PINGGY_TUNNEL_PROVIDER=pinggy" >&2
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   rm -f "$log"
-  ssh \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
-    -o LogLevel=ERROR \
-    -o ExitOnForwardFailure=yes \
-    -o ServerAliveInterval=20 \
-    -o ServerAliveCountMax=3 \
-    -R 80:127.0.0.1:$port \
-    nokey@localhost.run > "$log" 2>&1 &
+  ssh     -p 443     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o LogLevel=ERROR     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=20     -o ServerAliveCountMax=3     -R 0:127.0.0.1:$port     free.pinggy.io > "$log" 2>&1 &
   echo $! > "$RUNNER_TEMP/$name-tunnel.pid"
 }
 
@@ -156,6 +144,12 @@ get_tunnel_url() {
   local name="$1"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   grep -Eo 'https://[A-Za-z0-9.-]+\.(a\.pinggy\.link|pinggy-free\.link|free\.pinggy\.net|lhr\.life|localhost\.run)' "$log" | tail -1 || true
+}
+
+ {
+  local name="$1"
+  local log="$RUNNER_TEMP/$name-tunnel.log"
+  grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life|https://[A-Za-z0-9.-]+\.localhost\.run|https://[A-Za-z0-9.-]+\.localhost\.run' "$log" | tail -1 || true
 }
 
 probe_public() {
