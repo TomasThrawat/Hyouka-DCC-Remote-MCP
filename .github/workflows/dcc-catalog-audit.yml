@@ -54,8 +54,10 @@ jobs:
       - name: Install official Krita MCP adapter
         run: |
           set -Eeuo pipefail
-          timeout 300s "$RUNNER_TEMP/dcc-audit-venv/bin/dcc-mcp-krita" \
-            install --dcc-path "$(command -v krita)" --yes
+          "$RUNNER_TEMP/dcc-audit-venv/bin/python" - <<'PY'
+from dcc_mcp_krita.install import install
+print("KRITA_INSTALL_DESTINATION=" + str(install()))
+PY
           echo "KRITA_ADAPTER_INSTALL=PASS"
 
       - name: Start Blender and Krita
@@ -133,13 +135,3 @@ jobs:
 
           asyncio.run(main())
           PY
-
-      - name: Upload runtime logs
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: dcc-catalog-audit-logs
-          path: |
-            /home/runner/work/_temp/blender.log
-            /home/runner/work/_temp/krita.log
-          if-no-files-found: ignore
