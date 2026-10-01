@@ -44,7 +44,7 @@ python3 -m venv "$RUNNER_TEMP/dcc-venv"
 
 mkdir -p "$RUNNER_TEMP/dcc-python"
 "$RUNNER_TEMP/dcc-venv/bin/python" -m pip install \
-  --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.9"
+  --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.12"
 
 mkdir -p "$RUNNER_TEMP/blender"
 curl -fL --retry 5 --retry-all-errors \
