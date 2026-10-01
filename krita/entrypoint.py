@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import os
-import urllib.request
 import subprocess
 import time
 
@@ -33,55 +31,12 @@ def main() -> None:
         from dcc_mcp_krita.server import start_server, stop_server
 
         server = start_server(port=inner_port)
-
-        def wait_for_mcp():
-            body = json.dumps({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/list",
-                "params": {},
-            }).encode()
-            request = urllib.request.Request(
-                f"http://127.0.0.1:{inner_port}/mcp",
-                data=body,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json, text/event-stream",
-                },
-                method="POST",
-            )
-            last_error = None
-            for _ in range(60):
-                try:
-                    with urllib.request.urlopen(request, timeout=10) as response:
-                        text = response.read().decode("utf-8", "replace")
-                    tools = None
-                    for line in text.splitlines():
-                        if line.startswith("data: "):
-                            try:
-                                obj = json.loads(line[6:])
-                                if obj.get("result", {}).get("tools") is not None:
-                                    tools = obj["result"]["tools"]
-                            except json.JSONDecodeError:
-                                pass
-                    if tools is not None and len(tools) >= 16:
-                        return len(tools)
-                    last_error = RuntimeError(
-                        f"Krita MCP exposed only {0 if tools is None else len(tools)} tools"
-                    )
-                except Exception as exc:
-                    last_error = exc
-                time.sleep(1)
-            raise RuntimeError(f"Krita MCP readiness failed: {last_error}")
-
-        tool_count = wait_for_mcp()
         print(f"KRITA_MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
         print(f"KRITA_TOTAL_SKILLS={len(server.list_skills())}", flush=True)
         print(
             f"KRITA_LOADED_SKILLS={len(server.list_skills(status='loaded'))}",
             flush=True,
         )
-        print(f"KRITA_TOOLS={tool_count}", flush=True)
 
         while krita.poll() is None:
             time.sleep(2)
