@@ -179,13 +179,26 @@ for provider in ("blender", "krita"):
     )
 PY
 
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git add runtime/blender-endpoint.json runtime/krita-endpoint.json
-git commit -m "chore: publish live DCC endpoint URLs [skip ci]" || true
-git push origin HEAD:main
+echo "=== PUBLISHING LIVE ENDPOINT MANIFESTS ==="
+
+BLENDER_FILE_B64="$(base64 -w0 runtime/blender-endpoint.json)"
+BLENDER_SHA="$(gh api "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/blender-endpoint.json?ref=main" --jq '.sha')"
+gh api --method PUT "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/blender-endpoint.json" \
+  -f message="chore: publish live Blender MCP endpoint [skip ci]" \
+  -f content="$BLENDER_FILE_B64" \
+  -f branch="main" \
+  -f sha="$BLENDER_SHA"
+
+KRITA_FILE_B64="$(base64 -w0 runtime/krita-endpoint.json)"
+KRITA_SHA="$(gh api "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/krita-endpoint.json?ref=main" --jq '.sha')"
+gh api --method PUT "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/krita-endpoint.json" \
+  -f message="chore: publish live Krita MCP endpoint [skip ci]" \
+  -f content="$KRITA_FILE_B64" \
+  -f branch="main" \
+  -f sha="$KRITA_SHA"
 
 echo "=== DCC RUNTIME READY ==="
+
 echo "BLENDER_MCP_URL=$BLENDER_MCP_URL"
 echo "KRITA_MCP_URL=$KRITA_MCP_URL"
 
