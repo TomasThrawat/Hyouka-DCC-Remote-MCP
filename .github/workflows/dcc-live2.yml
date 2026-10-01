@@ -1,0 +1,15 @@
+name: dcc-live2
+
+on:
+  push:
+    paths:
+      - ".dcc-live2-trigger"
+  workflow_dispatch: {}
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start real DCC runtime
+        run: bash scripts/live-runtime.sh
