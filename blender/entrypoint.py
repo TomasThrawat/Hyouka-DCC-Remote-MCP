@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from __future__ import annotations
 
 import os
@@ -23,20 +25,8 @@ def main() -> None:
 
     dispatcher = BlockingDispatcher()
     server = BlenderMcpServer(port=inner_port, dispatcher=dispatcher)
-
-    server._config.host = "127.0.0.1"
-    server.register_builtin_actions(include_bundled=True)
     server.start()
-    discovered = server.list_skills()
-    for skill in discovered:
-        name = skill.get("name")
-        if name and not server.is_skill_loaded(name):
-            if not server.load_skill(name):
-                raise RuntimeError(f"Failed to load Blender skill: {name}")
-    print(f"BLENDER_SKILLS={len(discovered)}", flush=True)
-    print(f"BLENDER_LOADED_SKILLS={server.loaded_skill_count()}", flush=True)
-    if server.loaded_skill_count() < len([s for s in discovered if s.get("name")]):
-        raise RuntimeError("Not all discovered Blender skills were loaded")
+    server.discover_skills()
 
     proxy_env = os.environ.copy()
     proxy_env["PORT"] = str(public_port)
