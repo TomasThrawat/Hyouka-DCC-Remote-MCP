@@ -42,6 +42,7 @@ def main() -> None:
     public_port = int(os.environ.get("PORT", "10000"))
     inner_port = int(os.environ.get("DCC_MCP_INNER_PORT", "10001"))
     krita_url = "http://127.0.0.1:5678"
+    proxy = None
 
     xvfb = subprocess.Popen([
         "Xvfb", ":99", "-screen", "0", "1920x1080x24",
@@ -152,45 +153,43 @@ def main() -> None:
         def krita_open_file(path: str) -> str:
             return str(send_command("open_file", {"path": path}, timeout=30))
 
-        server_errors: list[BaseException] = []
+        errors: list[BaseException] = []
 
-        def run_mcp_server() -> None:
+        def run_server() -> None:
             try:
                 mcp.run(transport="http", host="127.0.0.1", port=inner_port)
             except BaseException as exc:
-                server_errors.append(exc)
+                errors.append(exc)
 
-        server_thread = threading.Thread(
-            target=run_mcp_server,
-            name="krita-mcp-http",
-            daemon=True,
-        )
-        server_thread.start()
-
+        thread = threading.Thread(target=run_server, daemon=True)
+        thread.start()
         wait_for_port(inner_port, timeout_seconds=60)
 
         proxy_env = os.environ.copy()
         proxy_env["PORT"] = str(public_port)
         proxy_env["UPSTREAM_URL"] = f"http://127.0.0.1:{inner_port}"
+        proxy_python = os.environ.get("DCC_PROXY_PYTHON", "python3")
+
         proxy = subprocess.Popen(
-            ["python3", "/app/auth_proxy.py"],
+            [proxy_python, os.path.join(os.path.dirname(__file__), "..", "auth_proxy.py")],
             env=proxy_env,
         )
 
         print(f"KRITA_MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
 
-        while server_thread.is_alive():
-            if server_errors:
-                raise RuntimeError(str(server_errors[0]))
+        while thread.is_alive():
+            if errors:
+                raise RuntimeError(str(errors[0]))
             if krita.poll() is not None:
                 raise RuntimeError(f"Krita exited with code {krita.returncode}")
             time.sleep(2)
     finally:
-        try:
+        if proxy is not None:
             proxy.terminate()
-            proxy.wait(timeout=5)
-        except Exception:
-            pass
+            try:
+                proxy.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proxy.kill()
         try:
             krita.terminate()
         except Exception:
