@@ -55,106 +55,61 @@ tar -xJf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender" --strip-compone
 
 echo "== Install official DCC MCP Krita adapter =="
 "$RUNNER_TEMP/dcc-venv/bin/python" - <<'PY'
-from dcc_mcp_krita.install import install
-print("KRITA_INSTALL_DESTINATION=" + str(install()))
-PY
+import json
+import urllib.request
 
-python3 - <<'PY'
-from configparser import ConfigParser
-from pathlib import Path
-import os
-
-path = Path(os.environ.get("DCC_MCP_KRITA_CONFIG", Path.home() / ".config" / "kritarc"))
-path.parent.mkdir(parents=True, exist_ok=True)
-parser = ConfigParser(interpolation=None)
-parser.optionxform = str
-if path.is_file():
-    parser.read(path, encoding="utf-8")
-if not parser.has_section("python"):
-    parser.add_section("python")
-parser.set("python", "enable_dcc_mcp_krita", "true")
-with path.open("w", encoding="utf-8") as stream:
-    parser.write(stream)
-print("KRITA_PLUGIN_ENABLED=true")
-PY
-
-PYVER="$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
-export DCC_PYTHON_PATH="$RUNNER_TEMP/dcc-python"
-export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
-export PATH="$RUNNER_TEMP/dcc-venv/bin:$PATH"
-export DCC_MCP_KRITA_ALLOWED_ROOTS="$GITHUB_WORKSPACE"
-export DCC_MCP_KRITA_BRIDGE_PORT=3848
-unset PYTHONPATH
-echo "PYTHON_ENV=$PYVER"
-env -u PYTHONPATH "$RUNNER_TEMP/dcc-venv/bin/python" -c 'import fastmcp, httpx; print("FASTMCP_READY=" + fastmcp.__version__)'
-
-export PORT=10000
-export DCC_MCP_INNER_PORT=10002
-"$RUNNER_TEMP/blender/blender" --background --python "$GITHUB_WORKSPACE/blender/entrypoint.py" \
-  > "$RUNNER_TEMP/blender.log" 2>&1 &
-echo $! > "$RUNNER_TEMP/blender.pid"
-
-for _ in $(seq 1 120); do
-  grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log" && break
-  kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender.log"; exit 1; }
-  sleep 1
-done
-grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log"
-
-export DISPLAY=:99
-export PORT=10001
-export DCC_MCP_INNER_PORT=10003
-
-env -u PYTHONPATH "$RUNNER_TEMP/dcc-venv/bin/python" "$GITHUB_WORKSPACE/krita/entrypoint.py" \
-  > "$RUNNER_TEMP/krita.log" 2>&1 &
-echo $! > "$RUNNER_TEMP/krita.pid"
-
-for _ in $(seq 1 180); do
-  grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log" && break
-  kill -0 "$(cat "$RUNNER_TEMP/krita.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita.log"; exit 1; }
-  sleep 1
-done
-grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log"
-
-"$RUNNER_TEMP/dcc-venv/bin/python" - <<'PY'
-import asyncio
-from fastmcp import Client
-
-async def list_with_timeout(url: str, label: str, minimum: int):
-    async with Client(url) as client:
-        tools = await asyncio.wait_for(client.list_tools(), timeout=90)
-    count = len(tools)
-    print(f"{label}_TOOLS={count}", flush=True)
-    assert count >= minimum, f"{label} tool coverage too small: {count}"
-    print(
-        f"{label}_TOOL_NAMES_SAMPLE="
-        + str(sorted(getattr(tool, "name", "") for tool in tools)[:25]),
-        flush=True,
+def inspect(url, label, minimum):
+    body = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {},
+    }).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
+        method="POST",
     )
+    with urllib.request.urlopen(req, timeout=90) as response:
+        text = response.read().decode("utf-8", "replace")
+    tools = None
+    for line in text.splitlines():
+        if line.startswith("data: "):
+            try:
+                obj = json.loads(line[6:])
+                if obj.get("result", {}).get("tools") is not None:
+                    tools = obj["result"]["tools"]
+            except json.JSONDecodeError:
+                pass
+    if tools is None:
+        raise RuntimeError(f"{label}: no tools payload returned")
+    names = sorted(t.get("name", "") for t in tools)
+    print(f"{label}_TOOLS={len(names)}", flush=True)
+    print(f"{label}_TOOL_NAMES_SAMPLE=" + str(names[:25]), flush=True)
+    assert len(names) >= minimum, f"{label} count {len(names)} < {minimum}"
 
-async def main():
-    await list_with_timeout("http://127.0.0.1:10002/mcp", "BLENDER", 200)
-    await list_with_timeout("http://127.0.0.1:10003/mcp", "KRITA", 16)
-
-asyncio.run(main())
+inspect("http://127.0.0.1:10002/mcp", "BLENDER", 200)
+inspect("http://127.0.0.1:10003/mcp", "KRITA", 16)
 PY
 
 start_tunnel() {
-  echo "PINGGY_TUNNEL_PROVIDER=pinggy" >&2
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   rm -f "$log"
-  ssh     -p 443     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o LogLevel=ERROR     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=20     -o ServerAliveCountMax=3     -R 0:127.0.0.1:$port     free.pinggy.io > "$log" 2>&1 &
-  echo $! > "$RUNNER_TEMP/$name-tunnel.pid"
+  ssh     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o LogLevel=ERROR     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=20     -o ServerAliveCountMax=3     -R 80:127.0.0.1:$port     nokey@localhost.run >"$log" 2>&1 &
+  echo $! >"$RUNNER_TEMP/$name-tunnel.pid"
 }
 
 get_tunnel_url() {
   local name="$1"
   local log="$RUNNER_TEMP/$name-tunnel.log"
-  grep -Eo 'https://[A-Za-z0-9.-]+\.(a\.pinggy\.link|pinggy-free\.link|free\.pinggy\.net|lhr\.life|localhost\.run)' "$log" | tail -1 || true
+  grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life' "$log" | tail -1 || true
 }
-
 
 probe_public() {
   local url="$1"
