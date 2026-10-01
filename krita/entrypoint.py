@@ -33,17 +33,13 @@ def main() -> None:
         server = start_server(port=inner_port)
         print(f"KRITA_MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
         print(f"KRITA_TOTAL_SKILLS={len(server.list_skills())}", flush=True)
-        print(
-            f"KRITA_LOADED_SKILLS={len(server.list_skills(status='loaded'))}",
-            flush=True,
-        )
+        print("KRITA_LOADED_SKILLS=NOT_EXPOSED_BY_ADAPTER", flush=True)
 
         while krita.poll() is None:
             time.sleep(2)
         raise RuntimeError(f"Krita exited with code {krita.returncode}")
     finally:
         try:
-            from dcc_mcp_krita.server import stop_server
             stop_server()
         except Exception:
             pass
