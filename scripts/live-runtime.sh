@@ -4,6 +4,19 @@ set -euo pipefail
 LOG="$RUNNER_TEMP/dcc-runtime.log"
 exec > >(tee -a "$LOG") 2>&1
 
+dump_runtime_logs() {
+  echo "=== Blender runtime log ==="
+  if [ -f "$RUNNER_TEMP/blender.log" ]; then tail -n 200 "$RUNNER_TEMP/blender.log"; fi
+  echo "=== Krita runtime log ==="
+  if [ -f "$RUNNER_TEMP/krita.log" ]; then tail -n 200 "$RUNNER_TEMP/krita.log"; fi
+  echo "=== Blender tunnel log ==="
+  if [ -f "$RUNNER_TEMP/blender-tunnel.log" ]; then tail -n 200 "$RUNNER_TEMP/blender-tunnel.log"; fi
+  echo "=== Krita tunnel log ==="
+  if [ -f "$RUNNER_TEMP/krita-tunnel.log" ]; then tail -n 200 "$RUNNER_TEMP/krita-tunnel.log"; fi
+}
+
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then dump_runtime_logs; fi' EXIT
+
 echo "=== DCC RUNTIME START ==="
 python3 --version
 uname -a
@@ -182,7 +195,38 @@ PY
 start_tunnel blender 10000
 start_tunnel krita 10001
 
-for _ in $(seq 1 90); do
+wait_for_public_ready() {
+  local name="$1"
+  local port="$2"
+  local pid_file="$RUNNER_TEMP/$name-tunnel.pid"
+
+  for _ in $(seq 1 60); do
+    local url
+    local status
+    url="$(get_tunnel_url "$name")"
+    if [ -n "$url" ]; then
+      status="$(probe_public "$url")"
+      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_PUBLIC_PROBE_STATUS=$status"
+      if [ "$status" = "401" ]; then
+        printf '%s' "$url"
+        return 0
+      fi
+    fi
+
+    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_TUNNEL_RESTART_DURING_BOOT"
+      start_tunnel "$name" "$port"
+    fi
+    sleep 2
+  done
+
+  echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_PUBLIC_PROBE_FAILED"
+  return 1
+}
+
+B="$(wait_for_public_ready blender 10000)"
+K="$(wait_for_public_ready krita 10001)"
+
   B="$(get_tunnel_url blender)"
   K="$(get_tunnel_url krita)"
   [ -n "$B" ] && [ -n "$K" ] && break
@@ -196,13 +240,13 @@ test -n "$K"
 
 B_STATUS="$(probe_public "$B")"
 K_STATUS="$(probe_public "$K")"
-echo "BLENDER_PUBLIC_PROBE_STATUS=$B_STATUS"
-echo "KRITA_PUBLIC_PROBE_STATUS=$K_STATUS"
+echo "BLENDER_PUBLIC_PROBE_STATUS_FINAL=$B_STATUS"
+echo "KRITA_PUBLIC_PROBE_STATUS_FINAL=$K_STATUS"
 
 test "$B_STATUS" = "401"
 test "$K_STATUS" = "401"
 
-publish_manifests "$B" "$K"
+publish_manifests "$B/mcp" "$K/mcp"
 
 echo "=== DCC RUNTIME READY ==="
 echo "BLENDER_MCP_URL=$B/mcp"
