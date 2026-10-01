@@ -125,7 +125,24 @@ wait_for_local_ready blender 10000
 wait_for_local_ready krita 10001
 echo "DCC_LOCAL_SERVERS_STARTED=PASS"
 
-start_tunnel() {
+"$RUNNER_TEMP/dcc-venv/bin/python" - <<'PY'
+import asyncio
+from fastmcp import Client
+
+async def main():
+    async with Client("http://127.0.0.1:10002/mcp") as c:
+        tools = await c.list_tools()
+        print("BLENDER_TOOLS=" + str(len(tools)))
+        assert tools
+    async with Client("http://127.0.0.1:10003/mcp") as c:
+        tools = await c.list_tools()
+        print("KRITA_TOOLS=" + str(len(tools)))
+        assert tools
+
+asyncio.run(main())
+PY
+
+start_tunnel()
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
