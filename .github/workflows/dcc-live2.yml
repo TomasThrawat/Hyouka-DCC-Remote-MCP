@@ -1,13 +1,13 @@
 name: dcc-live2
 
-permissions:
-  contents: write
-
 on:
   push:
     paths:
       - ".dcc-live2-trigger"
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   runtime:
@@ -16,6 +16,7 @@ jobs:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: advice.defaultBranchName
       GIT_CONFIG_VALUE_0: "false"
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
       - name: Start real DCC runtime
