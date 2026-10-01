@@ -19,5 +19,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
+      - name: Validate live runtime script
+        run: bash -n scripts/live-runtime.sh
+
       - name: Start real DCC runtime
         run: bash scripts/live-runtime.sh
