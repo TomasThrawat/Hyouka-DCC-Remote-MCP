@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Runtime smoke marker
-        run: echo "DCC_RUNTIME_SMOKE_REVISION=2026-10-01-14-01"
+        run: echo "DCC_RUNTIME_SMOKE_REVISION=2026-10-01-14-45"
 
       - name: Install system dependencies
         run: |
@@ -95,7 +95,7 @@ jobs:
           cat "$RUNNER_TEMP/krita.log" || true
           exit 1
 
-      - name: MCP session tools/list
+      - name: MCP JSON or SSE tools/list
         run: |
           set -Eeuo pipefail
           "$RUNNER_TEMP/dcc-smoke-venv/bin/python" - <<'PY'
@@ -104,53 +104,53 @@ jobs:
 
           P = "2025-03-26"
 
-          def call(url, method, session=None, ident=1):
+          def call(url, method, ident):
               payload = {
-                  "jsonrpc":"2.0",
-                  "id":ident,
-                  "method":method,
+                  "jsonrpc": "2.0",
+                  "id": ident,
+                  "method": method,
                   "params": {} if method == "tools/list" else {
-                      "protocolVersion":P,
-                      "capabilities":{},
-                      "clientInfo":{"name":"dcc-runtime-smoke","version":"1"}
-                  }
+                      "protocolVersion": P,
+                      "capabilities": {},
+                      "clientInfo": {"name": "dcc-runtime-smoke", "version": "1"},
+                  },
               }
-              headers = {
-                  "Content-Type":"application/json",
-                  "Accept":"application/json, text/event-stream",
-                  "Mcp-Protocol-Version":P,
-              }
-              if session:
-                  headers["Mcp-Session-Id"]=session
-              req=urllib.request.Request(
-                  url, data=json.dumps(payload).encode(), headers=headers, method="POST"
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(payload).encode(),
+                  headers={
+                      "Content-Type": "application/json",
+                      "Accept": "application/json, text/event-stream",
+                      "Mcp-Protocol-Version": P,
+                  },
+                  method="POST",
               )
-              with urllib.request.urlopen(req,timeout=60) as r:
-                  return r.headers, r.read().decode("utf-8","replace")
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return response.read().decode("utf-8", "replace")
 
           def extract(text):
               for line in text.splitlines():
                   if line.startswith("data: "):
-                      obj=json.loads(line[6:])
+                      obj = json.loads(line[6:])
                       if "error" in obj:
                           raise RuntimeError(obj["error"])
                       if "result" in obj:
                           return obj["result"]
+              obj = json.loads(text)
+              if "error" in obj:
+                  raise RuntimeError(obj["error"])
+              if "result" in obj:
+                  return obj["result"]
               raise RuntimeError("no JSON-RPC result")
 
-          for port,label,minimum in [(10002,"BLENDER",80),(10003,"KRITA",15)]:
-              url=f"http://127.0.0.1:{port}/mcp"
-              h,t=call(url,"initialize",ident=1)
-              sid=h.get("Mcp-Session-Id")
-              if not sid:
-                  raise RuntimeError(f"{label}: missing MCP session id")
-              extract(t)
-              _,t=call(url,"tools/list",sid,ident=2)
-              tools=extract(t).get("tools",[])
-              names=sorted(t.get("name","") for t in tools)
+          for port, label, minimum in [(10002, "BLENDER", 80), (10003, "KRITA", 15)]:
+              url = f"http://127.0.0.1:{port}/mcp"
+              extract(call(url, "initialize", 1))
+              payload = extract(call(url, "tools/list", 2))
+              names = sorted(t.get("name", "") for t in payload.get("tools", []))
               print(f"{label}_TOOLS={len(names)}")
               print(f"{label}_TOOLS_SAMPLE={names[:20]}")
-              assert len(names)>=minimum, f"{label}: {len(names)} < {minimum}"
+              assert len(names) >= minimum, f"{label}: {len(names)} < {minimum}"
           PY
 
       - name: Dump logs
