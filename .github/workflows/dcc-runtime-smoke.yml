@@ -104,7 +104,7 @@ jobs:
 
           P = "2025-03-26"
 
-          def call(url, method, ident):
+          def call(url, method, ident, session=None):
               payload = {
                   "jsonrpc": "2.0",
                   "id": ident,
@@ -115,20 +115,23 @@ jobs:
                       "clientInfo": {"name": "dcc-runtime-smoke", "version": "1"},
                   },
               }
-              req = urllib.request.Request(
-                  url,
-                  data=json.dumps(payload).encode(),
-                  headers={
-                      "Content-Type": "application/json",
-                      "Accept": "application/json, text/event-stream",
-                      "Mcp-Protocol-Version": P,
-                  },
-                  method="POST",
-              )
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  return response.read().decode("utf-8", "replace")
+              headers = {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json, text/event-stream",
+                  "Mcp-Protocol-Version": P,
+              }
+              if session:
+                  headers["Mcp-Session-Id"] = session
+              req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method="POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as response:
+                      return response.status, response.headers, response.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as error:
+                  body = error.read().decode("utf-8", "replace")
+                  raise RuntimeError(f"HTTP {error.code}: {body}") from error
 
           def extract(text):
+              text = text.strip()
               for line in text.splitlines():
                   if line.startswith("data: "):
                       obj = json.loads(line[6:])
@@ -141,12 +144,17 @@ jobs:
                   raise RuntimeError(obj["error"])
               if "result" in obj:
                   return obj["result"]
-              raise RuntimeError("no JSON-RPC result")
+              raise RuntimeError(f"no JSON-RPC result: {text[:1000]}")
 
           for port, label, minimum in [(10002, "BLENDER", 80), (10003, "KRITA", 15)]:
               url = f"http://127.0.0.1:{port}/mcp"
-              extract(call(url, "initialize", 1))
-              payload = extract(call(url, "tools/list", 2))
+              status, headers, text = call(url, "initialize", 1)
+              print(f"{label}_INITIALIZE_STATUS={status}")
+              session = headers.get("Mcp-Session-Id") or headers.get("mcp-session-id")
+              extract(text)
+              status, _, text = call(url, "tools/list", 2, session)
+              print(f"{label}_TOOLS_LIST_STATUS={status}")
+              payload = extract(text)
               names = sorted(t.get("name", "") for t in payload.get("tools", []))
               print(f"{label}_TOOLS={len(names)}")
               print(f"{label}_TOOLS_SAMPLE={names[:20]}")
