@@ -53,9 +53,9 @@ printf "[python]\nenable_kritamcp=true\n" > "$HOME/.config/kritarc"
 PYVER="$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
 export DCC_PYTHON_PATH="$RUNNER_TEMP/dcc-python"
 export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
-export PYTHONPATH="$RUNNER_TEMP/dcc-venv/lib/python\${PYVER}/site-packages:/usr/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages\${PYTHONPATH:+:\$PYTHONPATH}"
+unset PYTHONPATH
 echo "PYTHON_ENV=$PYVER"
-"$RUNNER_TEMP/dcc-venv/bin/python" -c 'import fastmcp, httpx; print("FASTMCP_READY=" + fastmcp.__version__)'
+env -u PYTHONPATH "$RUNNER_TEMP/dcc-venv/bin/python" -c 'import fastmcp, httpx; print("FASTMCP_READY=" + fastmcp.__version__)'
 
 export PORT=10000
 export DCC_MCP_INNER_PORT=10002
@@ -74,7 +74,7 @@ export DISPLAY=:99
 export PORT=10001
 export DCC_MCP_INNER_PORT=10003
 
-"$RUNNER_TEMP/dcc-venv/bin/python" "$GITHUB_WORKSPACE/krita/entrypoint.py" \
+env -u PYTHONPATH "$RUNNER_TEMP/dcc-venv/bin/python" "$GITHUB_WORKSPACE/krita/entrypoint.py" \
   > "$RUNNER_TEMP/krita.log" 2>&1 &
 echo $! > "$RUNNER_TEMP/krita.pid"
 
