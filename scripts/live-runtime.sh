@@ -9,49 +9,41 @@ python3 --version
 uname -a
 
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends \
-  ca-certificates curl git python3-venv python3-pip xz-utils openssh-client \
-  xvfb dbus-x11 krita \
-  libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0 \
-  libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3 \
-  libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0 \
-  libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1 \
-  libxkbcommon-x11-0 libegl1 fonts-dejavu
+sudo apt-get install -y --no-install-recommends   ca-certificates curl git python3-venv python3-pip xz-utils openssh-client   xvfb dbus-x11 krita python3-pyqt5 x11-xkb-utils xkeyboard-config   libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0   libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3   libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0   libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1   libxkbcommon-x11-0 libegl1 fonts-dejavu
 sudo rm -rf /var/lib/apt/lists/*
+
+python3 - <<'PY'
+import PyQt5
+print("PYQT5_READY=" + getattr(PyQt5, "__file__", "<unknown>"))
+PY
 
 python3 -m venv "$RUNNER_TEMP/dcc-venv"
 "$RUNNER_TEMP/dcc-venv/bin/pip" install --upgrade pip
-"$RUNNER_TEMP/dcc-venv/bin/pip" install \
-  "fastmcp>=2,<4" "httpx>=0.27,<1" "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"
+"$RUNNER_TEMP/dcc-venv/bin/pip" install   "fastmcp>=2,<4" "httpx>=0.27,<1" "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"
 
 mkdir -p "$RUNNER_TEMP/dcc-python"
-"$RUNNER_TEMP/dcc-venv/bin/python" -m pip install \
-  --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.9"
+"$RUNNER_TEMP/dcc-venv/bin/python" -m pip install   --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.9"
 
 mkdir -p "$RUNNER_TEMP/blender"
-curl -fL --retry 5 --retry-all-errors \
-  "https://download.blender.org/release/Blender5.2/blender-5.2.2-linux-x64.tar.xz" \
-  -o "$RUNNER_TEMP/blender.tar.xz"
+curl -fL --retry 5 --retry-all-errors   "https://download.blender.org/release/Blender5.2/blender-5.2.2-linux-x64.tar.xz"   -o "$RUNNER_TEMP/blender.tar.xz"
 tar -xJf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender" --strip-components=1
 "$RUNNER_TEMP/blender/blender" --version
 
 REF="5019f58852176aeeb11805126360ff749cd70dce"
 mkdir -p "$HOME/.local/share/krita/pykrita/kritamcp" "$HOME/.config"
-curl -fL --retry 5 --retry-all-errors \
-  "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp/__init__.py" \
-  -o "$HOME/.local/share/krita/pykrita/kritamcp/__init__.py"
-curl -fL --retry 5 --retry-all-errors \
-  "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp.desktop" \
-  -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
-printf "[python]\nenable_kritamcp=true\n" > "$HOME/.config/kritarc"
+curl -fL --retry 5 --retry-all-errors   "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp/__init__.py"   -o "$HOME/.local/share/krita/pykrita/kritamcp/__init__.py"
+curl -fL --retry 5 --retry-all-errors   "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp.desktop"   -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
+printf "[python]
+enable_kritamcp=true
+" > "$HOME/.config/kritarc"
 
 export DCC_PYTHON_PATH="$RUNNER_TEMP/dcc-python"
 export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
+export PYTHONPATH="/usr/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages:$PYTHONPATH"
 
 export PORT=10000
 export DCC_MCP_INNER_PORT=10002
-"$RUNNER_TEMP/blender/blender" --background --python "$GITHUB_WORKSPACE/blender/entrypoint.py" \
-  > "$RUNNER_TEMP/blender.log" 2>&1 &
+"$RUNNER_TEMP/blender/blender" --background --python "$GITHUB_WORKSPACE/blender/entrypoint.py"   > "$RUNNER_TEMP/blender.log" 2>&1 &
 echo $! > "$RUNNER_TEMP/blender.pid"
 
 for _ in $(seq 1 120); do
@@ -65,8 +57,7 @@ export DISPLAY=:99
 export PORT=10001
 export DCC_MCP_INNER_PORT=10003
 
-python3 "$GITHUB_WORKSPACE/krita/entrypoint.py" \
-  > "$RUNNER_TEMP/krita.log" 2>&1 &
+python3 "$GITHUB_WORKSPACE/krita/entrypoint.py"   > "$RUNNER_TEMP/krita.log" 2>&1 &
 echo $! > "$RUNNER_TEMP/krita.pid"
 
 for _ in $(seq 1 180); do
@@ -97,14 +88,7 @@ start_tunnel() {
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
-  ssh -T -N \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
-    -o ExitOnForwardFailure=yes \
-    -o ServerAliveInterval=30 \
-    -o ServerAliveCountMax=3 \
-    -R 80:localhost:$port \
-    nokey@localhost.run > "$log" 2>&1 &
+  ssh -T -N     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=30     -o ServerAliveCountMax=3     -R 80:localhost:$port     nokey@localhost.run > "$log" 2>&1 &
   echo $! > "$RUNNER_TEMP/$name-tunnel.pid"
 }
 
@@ -126,16 +110,8 @@ test -n "$K"
 export BLENDER_MCP_URL="$B/mcp"
 export KRITA_MCP_URL="$K/mcp"
 
-S1="$(curl -sS -o "$RUNNER_TEMP/blender-unauth.txt" -w '%{http_code}' \
-  -X POST "$BLENDER_MCP_URL" \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
-S2="$(curl -sS -o "$RUNNER_TEMP/krita-unauth.txt" -w '%{http_code}' \
-  -X POST "$KRITA_MCP_URL" \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
+S1="$(curl -sS -o "$RUNNER_TEMP/blender-unauth.txt" -w '%{http_code}'   -X POST "$BLENDER_MCP_URL"   -H 'Content-Type: application/json'   -H 'Accept: application/json, text/event-stream'   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
+S2="$(curl -sS -o "$RUNNER_TEMP/krita-unauth.txt" -w '%{http_code}'   -X POST "$KRITA_MCP_URL"   -H 'Content-Type: application/json'   -H 'Accept: application/json, text/event-stream'   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
 test "$S1" = "401"
 test "$S2" = "401"
 
