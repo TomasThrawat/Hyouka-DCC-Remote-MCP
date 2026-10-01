@@ -32,7 +32,7 @@ jobs:
           "$RUNNER_TEMP/dcc-smoke-venv/bin/pip" install --upgrade pip
           timeout 600s "$RUNNER_TEMP/dcc-smoke-venv/bin/pip" install             "fastmcp>=2,<4" "httpx>=0.27,<1" "aiohttp>=3.11,<4"             "PyJWT[crypto]>=2.9,<3" "dcc-mcp-krita==0.3.0"
           mkdir -p "$RUNNER_TEMP/dcc-python"
-          timeout 600s "$RUNNER_TEMP/dcc-smoke-venv/bin/pip" install             --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.12"
+          timeout 600s "$RUNNER_TEMP/dcc-smoke-venv/bin/pip" install             --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.9"
 
       - name: Install Blender
         run: |
