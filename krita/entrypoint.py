@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import time
 
 
@@ -42,6 +43,15 @@ def main() -> None:
         env=krita_env,
     )
 
+    proxy_env = os.environ.copy()
+    proxy_env["PORT"] = str(public_port)
+    proxy_env["UPSTREAM_URL"] = f"http://127.0.0.1:{inner_port}"
+    proxy_python = os.environ.get("DCC_PROXY_PYTHON", sys.executable)
+    proxy = subprocess.Popen(
+        [proxy_python, os.path.join(os.path.dirname(__file__), "..", "auth_proxy.py")],
+        env=proxy_env,
+    )
+
     try:
         from dcc_mcp_krita.server import start_server, stop_server
 
@@ -58,22 +68,15 @@ def main() -> None:
             stop_server()
         except Exception:
             pass
-        try:
-            krita.terminate()
-            krita.wait(timeout=5)
-        except Exception:
+        for process in (proxy, krita, xvfb):
             try:
-                krita.kill()
+                process.terminate()
+                process.wait(timeout=5)
             except Exception:
-                pass
-        try:
-            xvfb.terminate()
-            xvfb.wait(timeout=5)
-        except Exception:
-            try:
-                xvfb.kill()
-            except Exception:
-                pass
+                try:
+                    process.kill()
+                except Exception:
+                    pass
 
 
 if __name__ == "__main__":
