@@ -200,40 +200,38 @@ wait_for_public_ready() {
   local port="$2"
   local pid_file="$RUNNER_TEMP/$name-tunnel.pid"
 
+  local failures=0
   for _ in $(seq 1 60); do
     local url
     local status
     url="$(get_tunnel_url "$name")"
     if [ -n "$url" ]; then
       status="$(probe_public "$url")"
-      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_PUBLIC_PROBE_STATUS=$status"
+      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_PUBLIC_PROBE_STATUS=$status" >&2
       if [ "$status" = "401" ]; then
         printf '%s' "$url"
         return 0
       fi
+      failures=$((failures + 1))
+    else
+      failures=$((failures + 1))
     fi
 
-    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_TUNNEL_RESTART_DURING_BOOT"
+    if ! kill -0 "$(cat "$pid_file")" 2>/dev/null || [ "$failures" -ge 5 ]; then
+      echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_TUNNEL_RESTART_DURING_BOOT failures=$failures" >&2
+      kill "$(cat "$pid_file")" 2>/dev/null || true
       start_tunnel "$name" "$port"
+      failures=0
     fi
     sleep 2
   done
 
-  echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_PUBLIC_PROBE_FAILED"
+  echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_PUBLIC_PROBE_FAILED" >&2
   return 1
 }
 
 B="$(wait_for_public_ready blender 10000)"
 K="$(wait_for_public_ready krita 10001)"
-
-  B="$(get_tunnel_url blender)"
-  K="$(get_tunnel_url krita)"
-  [ -n "$B" ] && [ -n "$K" ] && break
-  kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender-tunnel.log"; exit 1; }
-  kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita-tunnel.log"; exit 1; }
-  sleep 2
-done
 
 test -n "$B"
 test -n "$K"
