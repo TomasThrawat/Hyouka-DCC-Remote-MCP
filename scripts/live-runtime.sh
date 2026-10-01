@@ -93,7 +93,7 @@ export DCC_MCP_KRITA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kritarc"
 python3 - <<'PY'
 from pathlib import Path
 import os
-import shutil
+import subprocess
 
 data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
 user_root = data_root / "krita" / "pykrita"
@@ -105,8 +105,8 @@ desktop = user_root / "dcc_mcp_krita.desktop"
 if not module.is_dir() or not desktop.is_file():
     raise RuntimeError(f"Krita plugin install missing under {user_root}")
 
-shutil.copytree(module, system_root / module.name, dirs_exist_ok=True)
-shutil.copy2(desktop, system_root / desktop.name)
+subprocess.run(["sudo","cp","-a",str(module),str(system_root / module.name)],check=True)
+subprocess.run(["sudo","cp","-f",str(desktop),str(system_root / desktop.name)],check=True)
 text = (system_root / desktop.name).read_text(encoding="utf-8")
 if "X-KDE-Library=dcc_mcp_krita" not in text:
     lines = []
