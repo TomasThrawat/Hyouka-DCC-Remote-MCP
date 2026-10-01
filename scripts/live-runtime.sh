@@ -21,8 +21,8 @@ echo "=== DCC RUNTIME START ==="
 python3 --version
 uname -a
 
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends \
+sudo apt-get update -o Acquire::Retries=5
+sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o DPkg::Lock::Timeout=120 \
   ca-certificates curl git python3-venv python3-pip xz-utils openssh-client \
   xvfb dbus-x11 krita python3-pyqt5 x11-xkb-utils \
   libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0 \
@@ -142,7 +142,7 @@ async def main():
 asyncio.run(main())
 PY
 
-start_tunnel()
+start_tunnel() {
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
