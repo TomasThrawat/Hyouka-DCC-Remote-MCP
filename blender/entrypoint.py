@@ -16,7 +16,7 @@ for candidate in [
 
 from dcc_mcp_core.host import BlockingDispatcher
 from dcc_mcp_blender.host import BlenderHost
-from dcc_mcp_blender.server import BlenderMcpServer
+from dcc_mcp_blender.server import start_server
 
 
 def main() -> None:
@@ -24,9 +24,12 @@ def main() -> None:
     inner_port = int(os.environ.get("DCC_MCP_INNER_PORT", "10002"))
 
     dispatcher = BlockingDispatcher()
-    server = BlenderMcpServer(port=inner_port, dispatcher=dispatcher)
-    server.start()
-    server.discover_skills()
+    server = start_server(
+        port=inner_port,
+        dispatcher=dispatcher,
+        register_builtins=True,
+        include_bundled=True,
+    )
 
     proxy_env = os.environ.copy()
     proxy_env["PORT"] = str(public_port)
@@ -41,6 +44,8 @@ def main() -> None:
     )
 
     print(f"MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
+    print(f"BLENDER_LOADED_SKILLS={server.loaded_skill_count()}", flush=True)
+    print(f"BLENDER_DISCOVERED_SKILLS={len(server.list_skills())}", flush=True)
 
     try:
         BlenderHost(dispatcher).run_headless()
