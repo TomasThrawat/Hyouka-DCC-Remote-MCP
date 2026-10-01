@@ -56,6 +56,30 @@ def main() -> None:
         from dcc_mcp_krita.server import start_server, stop_server
 
         server = start_server(port=inner_port)
+
+        from dcc_mcp_krita.bridge import KritaBridge
+
+        bridge = KritaBridge.from_env()
+        bridge_ready = False
+        last_bridge_error = None
+        for _ in range(60):
+            try:
+                status = bridge.call("krita.get_status")
+                if isinstance(status, dict):
+                    bridge_ready = True
+                    print(
+                        "KRITA_BRIDGE_READY=true "
+                        + "version=" + str(status.get("krita_version", "")),
+                        flush=True,
+                    )
+                    break
+            except Exception as exc:
+                last_bridge_error = exc
+            time.sleep(1)
+
+        if not bridge_ready:
+            raise RuntimeError(f"Krita bridge readiness failed: {last_bridge_error}")
+
         print(f"KRITA_MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
         print(f"KRITA_TOTAL_SKILLS={len(server.list_skills())}", flush=True)
         print("KRITA_LOADED_SKILLS=NOT_EXPOSED_BY_ADAPTER", flush=True)
