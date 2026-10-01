@@ -117,10 +117,10 @@ jobs:
           print("BLENDER_PROCESS_STATUS=" + json.dumps(blender_status))
           assert any(c.get("text") for c in blender_status.get("content", []))
 
-          krita_health = rpc("tools/call", 5, {
-              "name": "mcp_krita-mcp__krita_health",
+          krita_status = rpc("tools/call", 5, {
+              "name": "mcp_krita-mcp__dcc_diagnostics__process_status",
               "arguments": {},
           })
-          print("KRITA_HEALTH=" + json.dumps(krita_health))
-          assert any(c.get("text") for c in krita_health.get("content", []))
+          print("KRITA_PROCESS_STATUS=" + json.dumps(krita_status))
+          assert any(c.get("text") for c in krita_status.get("content", []))
           PY
