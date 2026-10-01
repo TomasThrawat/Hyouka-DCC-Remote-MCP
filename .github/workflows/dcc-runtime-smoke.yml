@@ -50,6 +50,36 @@ jobs:
           print("KRITA_INSTALL=" + str(install()))
           PY
 
+      - name: Repair Krita plugin desktop metadata
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+          desktop = root / "krita" / "pykrita" / "dcc_mcp_krita.desktop"
+          text = desktop.read_text(encoding="utf-8")
+          lines = []
+          seen = False
+          for line in text.splitlines():
+              if line.startswith("X-KDE-Library="):
+                  if not seen:
+                      lines.append("X-KDE-Library=dcc_mcp_krita")
+                      seen = True
+                  continue
+              lines.append(line)
+          if not seen:
+              marker = "X-KDE-ServiceTypes=Krita/PythonPlugin"
+              if marker not in lines:
+                  raise RuntimeError("Krita plugin desktop metadata missing X-KDE-ServiceTypes")
+              lines.insert(lines.index(marker) + 1, "X-KDE-Library=dcc_mcp_krita")
+          desktop.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("KRITA_PLUGIN_DESKTOP_MODULE=dcc_mcp_krita")
+          PY
+
+          export DCC_MCP_KRITA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kritarc"
+
       - name: Start DCC hosts
         run: |
           set -Eeuo pipefail
