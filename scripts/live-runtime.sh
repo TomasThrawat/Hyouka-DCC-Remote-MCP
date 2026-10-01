@@ -50,9 +50,12 @@ curl -fL --retry 5 --retry-all-errors \
   -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
 printf "[python]\nenable_kritamcp=true\n" > "$HOME/.config/kritarc"
 
+PYVER="$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
 export DCC_PYTHON_PATH="$RUNNER_TEMP/dcc-python"
 export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
-export PYTHONPATH="/usr/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages\${PYTHONPATH:+:\$PYTHONPATH}"
+export PYTHONPATH="$RUNNER_TEMP/dcc-venv/lib/python\${PYVER}/site-packages:/usr/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages\${PYTHONPATH:+:\$PYTHONPATH}"
+echo "PYTHON_ENV=$PYVER"
+python3 -c 'import fastmcp, httpx; print("FASTMCP_READY=" + fastmcp.__version__)'
 
 export PORT=10000
 export DCC_MCP_INNER_PORT=10002
