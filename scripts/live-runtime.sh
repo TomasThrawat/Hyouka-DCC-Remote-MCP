@@ -145,6 +145,15 @@ S2="$(curl -sS -o "$RUNNER_TEMP/krita-unauth.txt" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
+echo "BLENDER_PUBLIC_PROBE_STATUS=$S1"
+echo "KRITA_PUBLIC_PROBE_STATUS=$S2"
+echo "--- BLENDER TUNNEL LOG ---"
+cat "$RUNNER_TEMP/blender-tunnel.log"
+echo "--- KRITA TUNNEL LOG ---"
+cat "$RUNNER_TEMP/krita-tunnel.log"
+echo "BLENDER_PUBLIC_PROBE_BODY=$(tr "\n" " " < "$RUNNER_TEMP/blender-unauth.txt" 2>/dev/null || true)"
+echo "KRITA_PUBLIC_PROBE_BODY=$(tr "\n" " " < "$RUNNER_TEMP/krita-unauth.txt" 2>/dev/null || true)"
+
 test "$S1" = "401"
 test "$S2" = "401"
 
