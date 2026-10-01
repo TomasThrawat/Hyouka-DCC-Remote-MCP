@@ -1,5 +1,8 @@
 name: dcc-live2
 
+permissions:
+  contents: write
+
 on:
   push:
     paths:
