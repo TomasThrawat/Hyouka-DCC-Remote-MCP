@@ -130,14 +130,14 @@ start_tunnel() {
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   rm -f "$log"
-  ssh     -NT     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o LogLevel=ERROR     -o ExitOnForwardFailure=yes     -o ConnectTimeout=15     -o ServerAliveInterval=20     -o ServerAliveCountMax=3     -R 80:127.0.0.1:$port     nokey@localhost.run >"$log" 2>&1 &
+  npx --yes localtunnel@2.0.2 --port "$port" --local-host 127.0.0.1 >"$log" 2>&1 &
   echo $! >"$RUNNER_TEMP/$name-tunnel.pid"
 }
 
 get_tunnel_url() {
   local name="$1"
   local log="$RUNNER_TEMP/$name-tunnel.log"
-  grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life' "$log" | tail -1 || true
+  grep -Eo 'https://[A-Za-z0-9.-]+\.loca\.lt' "$log" | tail -1 || true
 }
 
 probe_public() {
