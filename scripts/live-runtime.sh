@@ -109,7 +109,7 @@ wait_for_local_ready() {
       return 1
     fi
     local status
-    status="$(curl -sS -o /dev/null -w '%{http_code}'       --max-time 5       -X POST "http://127.0.0.1:$port/mcp"       -H 'Content-Type: application/json'       -H 'Accept: application/json, text/event-stream'       -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"dcc-local-readiness","version":"1"}}}' || true)"
+    status="$(curl -sS -o /dev/null -w '%{http_code}'       --max-time 5       -X POST "http://127.0.0.1:$port/mcp"       -H 'Content-Type: application/json'       -H 'Accept: application/json, text/event-stream'       -H 'Mcp-Protocol-Version: 2025-03-26'       -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"dcc-local-readiness","version":"1"}}}' || true)"
     echo "$(echo "$name" | tr '[:lower:]' '[:upper:]')_LOCAL_PROBE_STATUS=$status"
     if [ "$status" = "401" ]; then
       return 0
@@ -130,7 +130,7 @@ start_tunnel() {
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
   rm -f "$log"
-  ssh     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o LogLevel=ERROR     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=20     -o ServerAliveCountMax=3     -R 80:127.0.0.1:$port     nokey@localhost.run >"$log" 2>&1 &
+  ssh     -NT     -o StrictHostKeyChecking=no     -o UserKnownHostsFile=/dev/null     -o LogLevel=ERROR     -o ExitOnForwardFailure=yes     -o ConnectTimeout=15     -o ServerAliveInterval=20     -o ServerAliveCountMax=3     -R 80:127.0.0.1:$port     nokey@localhost.run >"$log" 2>&1 &
   echo $! >"$RUNNER_TEMP/$name-tunnel.pid"
 }
 
