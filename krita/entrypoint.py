@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import time
@@ -31,9 +32,32 @@ def main() -> None:
         from dcc_mcp_krita.server import start_server, stop_server
 
         server = start_server(port=inner_port)
+
+        async def wait_for_mcp():
+            from fastmcp import Client
+            last_error = None
+            for _ in range(60):
+                try:
+                    async with Client(f"http://127.0.0.1:{inner_port}/mcp") as client:
+                        tools = await asyncio.wait_for(client.list_tools(), timeout=10)
+                    if len(tools) >= 16:
+                        return len(tools)
+                    last_error = RuntimeError(
+                        f"Krita MCP exposed only {len(tools)} tools"
+                    )
+                except Exception as exc:
+                    last_error = exc
+                await asyncio.sleep(1)
+            raise RuntimeError(f"Krita MCP readiness failed: {last_error}")
+
+        tool_count = asyncio.run(wait_for_mcp())
         print(f"KRITA_MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
         print(f"KRITA_TOTAL_SKILLS={len(server.list_skills())}", flush=True)
-        print(f"KRITA_LOADED_SKILLS={len(server.list_skills(status='loaded'))}", flush=True)
+        print(
+            f"KRITA_LOADED_SKILLS={len(server.list_skills(status='loaded'))}",
+            flush=True,
+        )
+        print(f"KRITA_TOOLS={tool_count}", flush=True)
 
         while krita.poll() is None:
             time.sleep(2)
