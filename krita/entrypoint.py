@@ -49,7 +49,7 @@ def main() -> None:
         "-ac", "+extension", "GLX", "+render", "-noreset"
     ])
 
-    krita = subprocess.Popen(["krita", "--nosplash", "--no-single-instance"])
+    krita = subprocess.Popen(["krita", "--nosplash"])
 
     try:
         wait_for_krita(krita_url, timeout_seconds=90)
