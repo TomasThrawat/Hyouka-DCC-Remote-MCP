@@ -6,12 +6,17 @@ sudo apt-get install -y --no-install-recommends \
   ca-certificates curl python3 python3-pip xz-utils \
   libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0 \
   libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3 \
-  xvfb dbus-x11 krita \
+  xvfb dbus-x11 krita python3-pyqt5 x11-xkb-utils xkeyboard-config \
   libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0 \
   libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1 \
   libxkbcommon-x11-0 libegl1 fonts-dejavu
 
 sudo rm -rf /var/lib/apt/lists/*
+
+python3 - <<'PY'
+import PyQt5
+print("PYQT5_READY=" + getattr(PyQt5, "__file__", "<unknown>"))
+PY
 
 mkdir -p "$HOME/.local/share/krita/pykrita/kritamcp" "$HOME/.config" "$HOME/dcc-python"
 
