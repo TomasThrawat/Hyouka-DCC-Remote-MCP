@@ -45,9 +45,12 @@ def main() -> None:
     proxy = None
 
     xvfb = subprocess.Popen([
-        "Xvfb", ":99", "-screen", "0", "1920x1080x24", "-kb",
+        "Xvfb", ":99", "-screen", "0", "1920x1080x24",
         "-ac", "+extension", "GLX", "+render", "-noreset"
     ])
+    time.sleep(2)
+    if xvfb.poll() is not None:
+        raise RuntimeError(f"Xvfb exited with code {xvfb.returncode}")
 
     krita = subprocess.Popen(["krita", "--nosplash"])
 
