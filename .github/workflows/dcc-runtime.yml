@@ -1,250 +1,27 @@
-name: dcc-runtime
+name: dcc-build-validation
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */5 * * *"
 
-concurrency:
-  group: dcc-runtime
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  blender:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 290
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Blender and MCP dependencies
+      - name: Validate Python
         run: |
           set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            ca-certificates curl python3 python3-pip xz-utils git \
-            libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 \
-            libxkbcommon0 libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3
-          sudo rm -rf /var/lib/apt/lists/*
-          sudo mkdir -p /opt/blender /opt/dcc-python
-          curl -fL --retry 5 --retry-all-errors \
-            "https://download.blender.org/release/Blender5.2/blender-5.2.2-linux-x64.tar.xz" \
-            -o /tmp/blender.tar.xz
-          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender
-          python3 -m pip install --break-system-packages --no-cache-dir \
-            --target /opt/dcc-python "dcc-mcp-blender==0.2.9" "fastmcp>=2,<4"
+          python3 -m py_compile auth_proxy.py
+          python3 -m py_compile blender/entrypoint.py
+          python3 -m py_compile krita/entrypoint.py
 
-      - name: Start Blender MCP and publish HTTPS endpoint
-        run: |
-          set -euo pipefail
-          export PYTHONPATH=/opt/dcc-python
-          /opt/blender/blender-5.2.2-linux-x64/blender \
-            --background --python blender/entrypoint.py \
-            > /tmp/blender-mcp.log 2>&1 &
-          BLENDER_PID=$!
-          echo "$BLENDER_PID" > /tmp/blender.pid
+      - name: Build Blender image
+        run: docker build -f blender/Dockerfile -t hyouka-blender-mcp:test .
 
-          for i in $(seq 1 90); do
-            if grep -q 'MCP_URL=' /tmp/blender-mcp.log; then
-              break
-            fi
-            if ! kill -0 "$BLENDER_PID" 2>/dev/null; then
-              cat /tmp/blender-mcp.log
-              exit 1
-            fi
-            sleep 2
-          done
-
-          test -s /tmp/blender-mcp.log
-          grep -q 'MCP_URL=' /tmp/blender-mcp.log
-
-          curl -fL --retry 5 --retry-all-errors \
-            "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" \
-            -o /tmp/cloudflared
-          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
-
-          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:10000 \
-            > /tmp/cloudflared.log 2>&1 &
-          TUNNEL_PID=$!
-          echo "$TUNNEL_PID" > /tmp/cloudflared.pid
-
-          for i in $(seq 1 60); do
-            URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /tmp/cloudflared.log | head -1 || true)"
-            if [ -n "$URL" ]; then
-              break
-            fi
-            if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
-              cat /tmp/cloudflared.log
-              exit 1
-            fi
-            sleep 2
-          done
-
-          test -n "$URL"
-          export DCC_URL="$URL/mcp"
-
-          python3 - <<'PY'
-          import asyncio, os
-          from fastmcp import Client
-
-          async def main():
-              async with Client(os.environ["DCC_URL"]) as client:
-                  tools = await client.list_tools()
-                  print("BLENDER_TOOLS", len(tools))
-
-          asyncio.run(main())
-          PY
-
-          python3 - <<'PY'
-          import datetime as dt, json, os
-          path = "runtime/blender-endpoint.json"
-          now = dt.datetime.now(dt.timezone.utc)
-          value = {
-              "url": os.environ["DCC_URL"],
-              "updatedAt": now.isoformat(),
-              "expiresAt": (now + dt.timedelta(minutes=285)).isoformat(),
-              "provider": "blender-mcp"
-          }
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(value, f, indent=2)
-              f.write("\n")
-          PY
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add runtime/blender-endpoint.json
-          git commit -m "ci: refresh Blender MCP endpoint [skip ci]" || true
-          git fetch origin main
-          git rebase origin/main || true
-          git push origin HEAD:main
-
-          while kill -0 "$BLENDER_PID" 2>/dev/null && kill -0 "$TUNNEL_PID" 2>/dev/null; do
-            sleep 30
-          done
-
-          cat /tmp/blender-mcp.log
-          cat /tmp/cloudflared.log
-          exit 1
-
-  krita:
-    runs-on: ubuntu-latest
-    timeout-minutes: 290
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Krita and Python dependencies
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            ca-certificates curl python3 python3-pip xvfb dbus-x11 krita \
-            libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 \
-            libxcb-render-util0 libxcb-shape0 libxcb-randr0 \
-            libxcb-image0 libxcb-util1 libxkbcommon-x11-0 \
-            libgl1 libglu1-mesa libegl1 fonts-dejavu
-          sudo rm -rf /var/lib/apt/lists/*
-          python3 -m pip install --break-system-packages --no-cache-dir \
-            "fastmcp>=2,<4" "httpx>=0.27,<1"
-
-      - name: Install and enable Krita MCP plugin
-        run: |
-          set -euxo pipefail
-          REF="5019f58852176aeeb11805126360ff749cd70dce"
-          mkdir -p "$HOME/.local/share/krita/pykrita/kritamcp" "$HOME/.config"
-          curl -fL --retry 5 --retry-all-errors \
-            "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp/__init__.py" \
-            -o "$HOME/.local/share/krita/pykrita/kritamcp/__init__.py"
-          curl -fL --retry 5 --retry-all-errors \
-            "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp.desktop" \
-            -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
-          cat > "$HOME/.config/kritarc" <<'EOF'
-[python]
-enable_kritamcp=true
-EOF
-
-      - name: Start Krita MCP and publish HTTPS endpoint
-        run: |
-          set -euo pipefail
-          python3 krita/entrypoint.py > /tmp/krita-mcp.log 2>&1 &
-          KRITA_PID=$!
-          echo "$KRITA_PID" > /tmp/krita.pid
-
-          for i in $(seq 1 120); do
-            if grep -q 'KRITA_MCP_URL=' /tmp/krita-mcp.log; then
-              break
-            fi
-            if ! kill -0 "$KRITA_PID" 2>/dev/null; then
-              cat /tmp/krita-mcp.log
-              exit 1
-            fi
-            sleep 2
-          done
-
-          grep -q 'KRITA_MCP_URL=' /tmp/krita-mcp.log
-
-          curl -fL --retry 5 --retry-all-errors \
-            "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" \
-            -o /tmp/cloudflared
-          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
-
-          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:10000 \
-            > /tmp/cloudflared.log 2>&1 &
-          TUNNEL_PID=$!
-          echo "$TUNNEL_PID" > /tmp/cloudflared.pid
-
-          for i in $(seq 1 60); do
-            URL="$(grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' /tmp/cloudflared.log | head -1 || true)"
-            if [ -n "$URL" ]; then
-              break
-            fi
-            if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
-              cat /tmp/cloudflared.log
-              exit 1
-            fi
-            sleep 2
-          done
-
-          test -n "$URL"
-          export DCC_URL="$URL/mcp"
-
-          python3 - <<'PY'
-          import asyncio, os
-          from fastmcp import Client
-
-          async def main():
-              async with Client(os.environ["DCC_URL"]) as client:
-                  tools = await client.list_tools()
-                  print("KRITA_TOOLS", len(tools))
-
-          asyncio.run(main())
-          PY
-
-          python3 - <<'PY'
-          import datetime as dt, json, os
-          path = "runtime/krita-endpoint.json"
-          now = dt.datetime.now(dt.timezone.utc)
-          value = {
-              "url": os.environ["DCC_URL"],
-              "updatedAt": now.isoformat(),
-              "expiresAt": (now + dt.timedelta(minutes=285)).isoformat(),
-              "provider": "krita-mcp"
-          }
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(value, f, indent=2)
-              f.write("\n")
-          PY
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add runtime/krita-endpoint.json
-          git commit -m "ci: refresh Krita MCP endpoint [skip ci]" || true
-          git fetch origin main
-          git rebase origin/main || true
-          git push origin HEAD:main
-
-          while kill -0 "$KRITA_PID" 2>/dev/null && kill -0 "$TUNNEL_PID" 2>/dev/null; do
-            sleep 30
-          done
-
-          cat /tmp/krita-mcp.log
-          cat /tmp/cloudflared.log
-          exit 1
+      - name: Build Krita image
+        run: docker build -f krita/Dockerfile -t hyouka-krita-mcp:test .
