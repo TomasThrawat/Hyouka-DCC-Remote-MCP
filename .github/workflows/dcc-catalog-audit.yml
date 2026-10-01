@@ -104,40 +104,45 @@ jobs:
           import json
           import urllib.request
 
-          def request(url, payload):
+          def request(url, payload, session=None):
+              req_headers={
+                  "Content-Type": "application/json",
+                  "Accept": "application/json, text/event-stream",
+                  "Mcp-Protocol-Version": "2025-03-26",
+              }
+              if session:
+                  req_headers["Mcp-Session-Id"] = session
               req = urllib.request.Request(
-                  url,
-                  data=json.dumps(payload).encode(),
-                  headers={
-                      "Content-Type": "application/json",
-                      "Accept": "application/json, text/event-stream",
-                      "Mcp-Protocol-Version": "2025-03-26",
-                  },
-                  method="POST",
+                  url, data=json.dumps(payload).encode(), headers=req_headers, method="POST"
               )
-              with urllib.request.urlopen(req, timeout=90) as response:
-                  return response.read().decode("utf-8", "replace")
+              try:
+                  with urllib.request.urlopen(req, timeout=90) as response:
+                      return response.status, response.headers, response.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as error:
+                  body = error.read().decode("utf-8", "replace")
+                  raise RuntimeError(f"HTTP {error.code}: {body}") from error
 
           def result(text):
+              text=text.strip()
               for line in text.splitlines():
                   if line.startswith("data: "):
-                      obj = json.loads(line[6:])
+                      obj=json.loads(line[6:])
                       if obj.get("result") is not None:
                           return obj["result"]
                       if obj.get("error") is not None:
                           raise RuntimeError(obj["error"])
               try:
-                  obj = json.loads(text)
+                  obj=json.loads(text)
               except json.JSONDecodeError:
-                  raise RuntimeError("no MCP JSON-RPC result")
+                  raise RuntimeError(f"no MCP JSON-RPC result: {text[:1000]}")
               if obj.get("result") is not None:
                   return obj["result"]
               if obj.get("error") is not None:
                   raise RuntimeError(obj["error"])
-              raise RuntimeError("no MCP JSON-RPC result")
+              raise RuntimeError(f"no MCP JSON-RPC result: {text[:1000]}")
 
           def inspect(url, label, minimum):
-              result(request(url, {
+              status, headers, text = request(url, {
                   "jsonrpc": "2.0",
                   "id": 1,
                   "method": "initialize",
@@ -146,13 +151,15 @@ jobs:
                       "capabilities": {},
                       "clientInfo": {"name": "dcc-catalog-audit", "version": "1"},
                   },
-              }))
-              payload = result(request(url, {
-                  "jsonrpc": "2.0",
-                  "id": 2,
-                  "method": "tools/list",
-                  "params": {},
-              }))
+              })
+              print(f"{label}_INITIALIZE_STATUS={status}")
+              session=headers.get("Mcp-Session-Id") or headers.get("mcp-session-id")
+              result(text)
+              status, _, text=request(url, {
+                  "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
+              }, session)
+              print(f"{label}_TOOLS_LIST_STATUS={status}")
+              payload=result(text)
               names = sorted(t.get("name", "") for t in payload.get("tools", []))
               print(f"{label}_TOOLS={len(names)}")
               print(f"{label}_TOOL_NAMES=" + "\n".join(names))
