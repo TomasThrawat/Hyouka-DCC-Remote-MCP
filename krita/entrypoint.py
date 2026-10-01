@@ -25,7 +25,22 @@ def main() -> None:
     if xvfb.poll() is not None:
         raise RuntimeError(f"Xvfb exited with code {xvfb.returncode}")
 
-    krita = subprocess.Popen(["krita", "--nosplash"])
+    krita_env = os.environ.copy()
+    pyqt_paths = [
+        "/usr/lib/python3/dist-packages",
+        "/usr/lib/x86_64-linux-gnu/python3/dist-packages",
+    ]
+    existing = [path for path in pyqt_paths if os.path.isdir(path)]
+    old_pythonpath = krita_env.get("PYTHONPATH")
+    if old_pythonpath:
+        existing.append(old_pythonpath)
+    if existing:
+        krita_env["PYTHONPATH"] = os.pathsep.join(existing)
+
+    krita = subprocess.Popen(
+        ["krita", "--nosplash"],
+        env=krita_env,
+    )
 
     try:
         from dcc_mcp_krita.server import start_server, stop_server
