@@ -64,9 +64,6 @@ grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log"
 export DISPLAY=:99
 export PORT=10001
 export DCC_MCP_INNER_PORT=10003
-Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset \
-  > "$RUNNER_TEMP/xvfb.log" 2>&1 &
-echo $! > "$RUNNER_TEMP/xvfb.pid"
 
 python3 "$GITHUB_WORKSPACE/krita/entrypoint.py" \
   > "$RUNNER_TEMP/krita.log" 2>&1 &
