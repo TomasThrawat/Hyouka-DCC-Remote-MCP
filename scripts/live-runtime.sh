@@ -85,6 +85,25 @@ desktop.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print("KRITA_PLUGIN_DESKTOP_MODULE=dcc_mcp_krita")
 PY
 
+python3 - <<'PY'
+from pathlib import Path
+import os
+root = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local' / 'share'))
+desktop = root / 'krita' / 'pykrita' / 'dcc_mcp_krita.desktop'
+text = desktop.read_text(encoding='utf-8')
+lines = []
+for line in text.splitlines():
+    if line.startswith('X-KDE-ServiceTypes=') or line.startswith('ServiceTypes='):
+        continue
+    if line.startswith('X-KDE-Library='):
+        continue
+    lines.append(line)
+lines.insert(1, 'ServiceTypes=Krita/PythonPlugin')
+lines.insert(2, 'X-KDE-Library=dcc_mcp_krita')
+desktop.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+print('KRITA_CANONICAL_DESKTOP_METADATA=PASS')
+PY
+
 export DCC_MCP_KRITA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kritarc"
 
 # Krita scans system resource locations on some distro builds. Mirror the
