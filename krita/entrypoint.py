@@ -45,7 +45,7 @@ def main() -> None:
     proxy = None
 
     xvfb = subprocess.Popen([
-        "Xvfb", ":99", "-screen", "0", "1920x1080x24",
+        "Xvfb", ":99", "-screen", "0", "1920x1080x24", "-kb",
         "-ac", "+extension", "GLX", "+render", "-noreset"
     ])
 
