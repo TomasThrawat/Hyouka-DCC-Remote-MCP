@@ -146,7 +146,7 @@ start_tunnel() {
 get_tunnel_url() {
   local name="$1"
   local log="$RUNNER_TEMP/$name-tunnel.log"
-  grep -Eo 'https://[A-Za-z0-9.-]+\\.(pinggy\\.link|pinggy-free\\.link)' "$log" | tail -1 || true
+  grep -Eo 'https://[^[:space:]]+\.(pinggy\.link|pinggy-free\.link)' "$log" | tail -1 || true
 }
 
 probe_public() {
