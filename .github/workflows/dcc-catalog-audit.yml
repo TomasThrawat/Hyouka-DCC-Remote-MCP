@@ -51,13 +51,12 @@ jobs:
           PY
           echo "KRITA_ADAPTER_INSTALL=PASS"
 
-      - name: Repair Krita plugin desktop metadata
+      - name: Repair Krita plugin desktop metadata and install into system resource path
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
           import os
-
           root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
           desktop = root / "krita" / "pykrita" / "dcc_mcp_krita.desktop"
           text = desktop.read_text(encoding="utf-8")
@@ -79,6 +78,18 @@ jobs:
           print("KRITA_PLUGIN_DESKTOP_MODULE=dcc_mcp_krita")
           PY
 
+          DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}"
+          USER_PLUGIN="$DATA_ROOT/krita/pykrita/dcc_mcp_krita"
+          USER_DESKTOP="$DATA_ROOT/krita/pykrita/dcc_mcp_krita.desktop"
+          test -d "$USER_PLUGIN"
+          test -f "$USER_DESKTOP"
+
+          sudo install -d /usr/share/krita/pykrita
+          sudo rm -rf /usr/share/krita/pykrita/dcc_mcp_krita
+          sudo cp -a "$USER_PLUGIN" /usr/share/krita/pykrita/dcc_mcp_krita
+          sudo cp -f "$USER_DESKTOP" /usr/share/krita/pykrita/dcc_mcp_krita.desktop
+          grep -q '^X-KDE-Library=dcc_mcp_krita$' /usr/share/krita/pykrita/dcc_mcp_krita.desktop
+          echo "KRITA_SYSTEM_PLUGIN=/usr/share/krita/pykrita/dcc_mcp_krita"
           export DCC_MCP_KRITA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kritarc"
 
       - name: Start Blender and Krita
