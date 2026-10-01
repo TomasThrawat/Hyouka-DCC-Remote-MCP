@@ -21,7 +21,7 @@ RUN curl -fL --retry 5 --retry-all-errors \
 
 RUN mkdir -p /opt/dcc-python && \
     python3 -m pip install --break-system-packages --no-cache-dir \
-      --target /opt/dcc-python "dcc-mcp-blender==0.2.9" \
+      --target /opt/dcc-python "dcc-mcp-blender==0.2.12" \
       "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"
 
 COPY auth_proxy.py /app/auth_proxy.py

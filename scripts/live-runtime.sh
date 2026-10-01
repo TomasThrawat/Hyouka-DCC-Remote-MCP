@@ -40,11 +40,11 @@ PY
 python3 -m venv "$RUNNER_TEMP/dcc-venv"
 "$RUNNER_TEMP/dcc-venv/bin/pip" install --upgrade pip
 "$RUNNER_TEMP/dcc-venv/bin/pip" install \
-  "fastmcp>=2,<4" "httpx>=0.27,<1" "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"
+  "fastmcp>=2,<4" "httpx>=0.27,<1" "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3" "dcc-mcp-krita==0.3.0"
 
 mkdir -p "$RUNNER_TEMP/dcc-python"
 "$RUNNER_TEMP/dcc-venv/bin/python" -m pip install \
-  --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.9"
+  --target "$RUNNER_TEMP/dcc-python" "dcc-mcp-blender==0.2.12"
 
 mkdir -p "$RUNNER_TEMP/blender"
 curl -fL --retry 5 --retry-all-errors \
@@ -53,19 +53,34 @@ curl -fL --retry 5 --retry-all-errors \
 tar -xJf "$RUNNER_TEMP/blender.tar.xz" -C "$RUNNER_TEMP/blender" --strip-components=1
 "$RUNNER_TEMP/blender/blender" --version
 
-REF="5019f58852176aeeb11805126360ff749cd70dce"
-mkdir -p "$HOME/.local/share/krita/pykrita/kritamcp" "$HOME/.config"
-curl -fL --retry 5 --retry-all-errors \
-  "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp/__init__.py" \
-  -o "$HOME/.local/share/krita/pykrita/kritamcp/__init__.py"
-curl -fL --retry 5 --retry-all-errors \
-  "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp.desktop" \
-  -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
-printf "[python]\nenable_kritamcp=true\n" > "$HOME/.config/kritarc"
+echo "== Install official DCC MCP Krita adapter =="
+dcc-mcp-krita install --dcc-path "$(command -v krita)" --yes
+
+python3 - <<'PY'
+from configparser import ConfigParser
+from pathlib import Path
+import os
+
+path = Path(os.environ.get("DCC_MCP_KRITA_CONFIG", Path.home() / ".config" / "kritarc"))
+path.parent.mkdir(parents=True, exist_ok=True)
+parser = ConfigParser(interpolation=None)
+parser.optionxform = str
+if path.is_file():
+    parser.read(path, encoding="utf-8")
+if not parser.has_section("python"):
+    parser.add_section("python")
+parser.set("python", "enable_dcc_mcp_krita", "true")
+with path.open("w", encoding="utf-8") as stream:
+    parser.write(stream)
+print("KRITA_PLUGIN_ENABLED=true")
+PY
 
 PYVER="$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
 export DCC_PYTHON_PATH="$RUNNER_TEMP/dcc-python"
 export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
+export PATH="$RUNNER_TEMP/dcc-venv/bin:$PATH"
+export DCC_MCP_KRITA_ALLOWED_ROOTS="$GITHUB_WORKSPACE"
+export DCC_MCP_KRITA_BRIDGE_PORT=3848
 unset PYTHONPATH
 echo "PYTHON_ENV=$PYVER"
 env -u PYTHONPATH "$RUNNER_TEMP/dcc-venv/bin/python" -c 'import fastmcp, httpx; print("FASTMCP_READY=" + fastmcp.__version__)'
@@ -106,11 +121,11 @@ async def main():
     async with Client("http://127.0.0.1:10002/mcp") as c:
         tools = await c.list_tools()
         print("BLENDER_TOOLS=" + str(len(tools)))
-        assert tools
+        assert len(tools) >= 200, f"Blender tool coverage too small: {len(tools)}"
     async with Client("http://127.0.0.1:10003/mcp") as c:
         tools = await c.list_tools()
         print("KRITA_TOOLS=" + str(len(tools)))
-        assert tools
+        assert len(tools) >= 16, f"Krita tool coverage too small: {len(tools)}"
 
 asyncio.run(main())
 PY

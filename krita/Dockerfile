@@ -16,20 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu && \
     rm -rf /var/lib/apt/lists/*
 
-ARG KRITA_MCP_REF=5019f58852176aeeb11805126360ff749cd70dce
-
 RUN python3 -m pip install --break-system-packages --no-cache-dir \
     "fastmcp>=2,<4" "httpx>=0.27,<1" \
-    "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"
-
-RUN mkdir -p /root/.local/share/krita/pykrita/kritamcp /root/.config && \
-    curl -fL --retry 5 --retry-all-errors \
-      "https://raw.githubusercontent.com/nanayax3/krita-mcp/${KRITA_MCP_REF}/krita-plugin/kritamcp/__init__.py" \
-      -o /root/.local/share/krita/pykrita/kritamcp/__init__.py && \
-    curl -fL --retry 5 --retry-all-errors \
-      "https://raw.githubusercontent.com/nanayax3/krita-mcp/${KRITA_MCP_REF}/krita-plugin/kritamcp.desktop" \
-      -o /root/.local/share/krita/pykrita/kritamcp.desktop && \
-    printf "[python]\nenable_kritamcp=true\n" > /root/.config/kritarc
+    "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3" \
+    "dcc-mcp-krita==0.3.0"
 
 COPY auth_proxy.py /app/auth_proxy.py
 COPY krita/entrypoint.py /app/entrypoint.py
