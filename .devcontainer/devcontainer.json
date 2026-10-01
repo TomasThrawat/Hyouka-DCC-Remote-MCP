@@ -1,0 +1,29 @@
+{
+  "name": "Hyouka DCC MCP Runtime",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "forwardPorts": [10000, 10001],
+  "portsAttributes": {
+    "10000": {
+      "label": "Blender MCP",
+      "protocol": "http",
+      "onAutoForward": "notify"
+    },
+    "10001": {
+      "label": "Krita MCP",
+      "protocol": "http",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    },
+    "codespaces": {
+      "openFiles": ["README.md"]
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/prepare-runtime.sh",
+  "postStartCommand": "bash .devcontainer/start-runtime.sh"
+}
