@@ -24,7 +24,9 @@ jobs:
           python3 -m http.server 18001 --bind 127.0.0.1 >"$RUNNER_TEMP/target2.log" 2>&1 &
           echo $! >"$RUNNER_TEMP/target2.pid"
           for _ in $(seq 1 20); do
-            curl -fsS http://127.0.0.1:18000 >/dev/null &&             curl -fsS http://127.0.0.1:18001 >/dev/null && exit 0
+            curl -fsS http://127.0.0.1:18000 >/dev/null &&
+            curl -fsS http://127.0.0.1:18001 >/dev/null &&
+            exit 0
             sleep 1
           done
           exit 1
@@ -33,7 +35,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           rm -f "$RUNNER_TEMP/local.log"
-          ssh -NT             -o StrictHostKeyChecking=no             -o UserKnownHostsFile=/dev/null             -o LogLevel=ERROR             -o ExitOnForwardFailure=yes             -o ConnectTimeout=15             -o ServerAliveInterval=20             -o ServerAliveCountMax=3             -R 80:127.0.0.1:18000             nokey@localhost.run >"$RUNNER_TEMP/local.log" 2>&1 &
+          ssh -T             -o StrictHostKeyChecking=no             -o UserKnownHostsFile=/dev/null             -o LogLevel=ERROR             -o ExitOnForwardFailure=yes             -o ConnectTimeout=15             -o ServerAliveInterval=20             -o ServerAliveCountMax=3             -R 80:127.0.0.1:18000             nokey@localhost.run >"$RUNNER_TEMP/local.log" 2>&1 &
           echo $! >"$RUNNER_TEMP/local.pid"
           for _ in $(seq 1 60); do
             URL="$(grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life' "$RUNNER_TEMP/local.log" | tail -1 || true)"
