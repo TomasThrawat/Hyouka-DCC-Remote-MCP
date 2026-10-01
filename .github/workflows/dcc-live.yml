@@ -1,6 +1,9 @@
 name: dcc-live
 
 on:
+  push:
+    paths:
+      - ".runtime-trigger"
   workflow_dispatch: {}
 
 permissions:
@@ -60,11 +63,14 @@ EOF
           export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
           export PORT=10000
           export DCC_MCP_INNER_PORT=10002
-          "$RUNNER_TEMP/blender/blender"             --background --python "$GITHUB_WORKSPACE/blender/entrypoint.py"             > "$RUNNER_TEMP/blender.log" 2>&1 &
+          "$RUNNER_TEMP/blender/blender"             --background             --python "$GITHUB_WORKSPACE/blender/entrypoint.py"             > "$RUNNER_TEMP/blender.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender.pid"
           for _ in $(seq 1 120); do
             grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log" && break
-            kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender.log"; exit 1; }
+            kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || {
+              cat "$RUNNER_TEMP/blender.log"
+              exit 1
+            }
             sleep 1
           done
           grep -q 'MCP_URL=' "$RUNNER_TEMP/blender.log"
@@ -82,7 +88,10 @@ EOF
           echo $! > "$RUNNER_TEMP/krita.pid"
           for _ in $(seq 1 150); do
             grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log" && break
-            kill -0 "$(cat "$RUNNER_TEMP/krita.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita.log"; exit 1; }
+            kill -0 "$(cat "$RUNNER_TEMP/krita.pid")" 2>/dev/null || {
+              cat "$RUNNER_TEMP/krita.log"
+              exit 1
+            }
             sleep 1
           done
           grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log"
@@ -121,8 +130,14 @@ EOF
             B="$(grep -Eo 'https://[A-Za-z0-9.-]+' "$RUNNER_TEMP/blender-tunnel.log" | head -1 || true)"
             K="$(grep -Eo 'https://[A-Za-z0-9.-]+' "$RUNNER_TEMP/krita-tunnel.log" | head -1 || true)"
             if [ -n "$B" ] && [ -n "$K" ]; then break; fi
-            kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender-tunnel.log"; exit 1; }
-            kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita-tunnel.log"; exit 1; }
+            kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || {
+              cat "$RUNNER_TEMP/blender-tunnel.log"
+              exit 1
+            }
+            kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || {
+              cat "$RUNNER_TEMP/krita-tunnel.log"
+              exit 1
+            }
             sleep 2
           done
 
