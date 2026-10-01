@@ -111,6 +111,7 @@ jobs:
                   headers={
                       "Content-Type": "application/json",
                       "Accept": "application/json, text/event-stream",
+                      "Mcp-Protocol-Version": "2025-03-26",
                   },
                   method="POST",
               )
@@ -125,6 +126,14 @@ jobs:
                           return obj["result"]
                       if obj.get("error") is not None:
                           raise RuntimeError(obj["error"])
+              try:
+                  obj = json.loads(text)
+              except json.JSONDecodeError:
+                  raise RuntimeError("no MCP JSON-RPC result")
+              if obj.get("result") is not None:
+                  return obj["result"]
+              if obj.get("error") is not None:
+                  raise RuntimeError(obj["error"])
               raise RuntimeError("no MCP JSON-RPC result")
 
           def inspect(url, label, minimum):
