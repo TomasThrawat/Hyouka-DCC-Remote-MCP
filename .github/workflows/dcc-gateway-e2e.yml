@@ -1,0 +1,112 @@
+name: DCC Gateway E2E
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify live endpoint manifests
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for provider in ("blender", "krita"):
+              data = json.loads(Path(f"runtime/{provider}-endpoint.json").read_text())
+              url = data["url"]
+              assert url.startswith("https://")
+              assert data["provider"] == f"{provider}-mcp"
+              print(f"{provider.upper()}_ENDPOINT={url}")
+              print(f"{provider.upper()}_UPDATED_AT={data['updatedAt']}")
+              print(f"{provider.upper()}_EXPIRES_AT={data['expiresAt']}")
+          PY
+
+      - name: Verify production gateway MCP
+        env:
+          GATEWAY_URL: https://hyouka-free-game-engine-mcp.vercel.app/api/mcp
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          url = os.environ["GATEWAY_URL"]
+          protocol = "2025-03-26"
+
+          def rpc(method, ident, params):
+              payload = json.dumps({
+                  "jsonrpc": "2.0",
+                  "id": ident,
+                  "method": method,
+                  "params": params,
+              }).encode()
+              req = urllib.request.Request(
+                  url,
+                  data=payload,
+                  headers={
+                      "Content-Type": "application/json",
+                      "Accept": "application/json, text/event-stream",
+                      "Mcp-Protocol-Version": protocol,
+                  },
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  body = response.read().decode("utf-8", "replace")
+                  print(f"{method.upper()}_HTTP={response.status}")
+                  return extract(body)
+
+          def extract(body):
+              body = body.strip()
+              for line in body.splitlines():
+                  if line.startswith("data: "):
+                      obj = json.loads(line[6:])
+                      if "error" in obj:
+                          raise RuntimeError(obj["error"])
+                      if "result" in obj:
+                          return obj["result"]
+              obj = json.loads(body)
+              if "error" in obj:
+                  raise RuntimeError(obj["error"])
+              if "result" in obj:
+                  return obj["result"]
+              raise RuntimeError(f"no JSON-RPC result: {body[:1000]}")
+
+          init = rpc("initialize", 1, {
+              "protocolVersion": protocol,
+              "capabilities": {},
+              "clientInfo": {"name": "dcc-gateway-e2e", "version": "1"},
+          })
+          assert init.get("protocolVersion") == protocol
+
+          catalog = rpc("tools/list", 2, {})
+          tools = catalog.get("tools", [])
+          names = {t.get("name", "") for t in tools}
+          blender = sorted(n for n in names if n.startswith("mcp_blender-mcp__"))
+          krita = sorted(n for n in names if n.startswith("mcp_krita-mcp__"))
+
+          print(f"TOTAL_GATEWAY_TOOLS={len(tools)}")
+          print(f"BLENDER_GATEWAY_TOOLS={len(blender)}")
+          print(f"KRITA_GATEWAY_TOOLS={len(krita)}")
+
+          assert len(blender) >= 89, len(blender)
+          assert len(krita) >= 61, len(krita)
+          assert len(tools) >= len(blender) + len(krita)
+
+          inv = rpc("tools/call", 3, {
+              "name": "godot_mcp_inventory",
+              "arguments": {},
+          })
+          texts = [c.get("text", "") for c in inv.get("content", [])]
+          inventory_text = "\n".join(texts)
+          print("GODOT_MCP_INVENTORY=" + inventory_text)
+          PY
