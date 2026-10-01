@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
+import threading
 import time
 
 
@@ -25,8 +27,20 @@ def wait_for_krita(url: str, timeout_seconds: int = 90) -> None:
     raise RuntimeError(f"Krita plugin did not become ready: {last_error}")
 
 
+def wait_for_port(port: int, timeout_seconds: int = 60) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=2):
+                return
+        except OSError:
+            time.sleep(1)
+    raise RuntimeError(f"Krita MCP HTTP server did not bind port {port}")
+
+
 def main() -> None:
-    port = int(os.environ.get("PORT", "10000"))
+    public_port = int(os.environ.get("PORT", "10000"))
+    inner_port = int(os.environ.get("DCC_MCP_INNER_PORT", "10001"))
     krita_url = "http://127.0.0.1:5678"
 
     xvfb = subprocess.Popen([
@@ -34,9 +48,9 @@ def main() -> None:
         "-ac", "+extension", "GLX", "+render", "-noreset"
     ])
 
-    try:
-        krita = subprocess.Popen(["krita", "--nosplash", "--no-single-instance"])
+    krita = subprocess.Popen(["krita", "--nosplash", "--no-single-instance"])
 
+    try:
         wait_for_krita(krita_url, timeout_seconds=90)
 
         from fastmcp import FastMCP
@@ -138,14 +152,53 @@ def main() -> None:
         def krita_open_file(path: str) -> str:
             return str(send_command("open_file", {"path": path}, timeout=30))
 
-        print(f"KRITA_MCP_URL=http://0.0.0.0:{port}/mcp", flush=True)
-        mcp.run(transport="http", host="0.0.0.0", port=port)
+        server_errors: list[BaseException] = []
+
+        def run_mcp_server() -> None:
+            try:
+                mcp.run(transport="http", host="127.0.0.1", port=inner_port)
+            except BaseException as exc:
+                server_errors.append(exc)
+
+        server_thread = threading.Thread(
+            target=run_mcp_server,
+            name="krita-mcp-http",
+            daemon=True,
+        )
+        server_thread.start()
+
+        wait_for_port(inner_port, timeout_seconds=60)
+
+        proxy_env = os.environ.copy()
+        proxy_env["PORT"] = str(public_port)
+        proxy_env["UPSTREAM_URL"] = f"http://127.0.0.1:{inner_port}"
+        proxy = subprocess.Popen(
+            ["python3", "/app/auth_proxy.py"],
+            env=proxy_env,
+        )
+
+        print(f"KRITA_MCP_URL=http://127.0.0.1:{public_port}/mcp", flush=True)
+
+        while server_thread.is_alive():
+            if server_errors:
+                raise RuntimeError(str(server_errors[0]))
+            if krita.poll() is not None:
+                raise RuntimeError(f"Krita exited with code {krita.returncode}")
+            time.sleep(2)
     finally:
+        try:
+            proxy.terminate()
+            proxy.wait(timeout=5)
+        except Exception:
+            pass
         try:
             krita.terminate()
         except Exception:
             pass
-        xvfb.terminate()
+        try:
+            xvfb.terminate()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
