@@ -97,74 +97,22 @@ jobs:
           tail -n 300 "$RUNNER_TEMP/krita.log" || true
           exit 1
 
-      - name: Enumerate complete tool catalogs
+      - name: Enumerate complete tool catalogs with FastMCP
         run: |
           set -Eeuo pipefail
           "$RUNNER_TEMP/dcc-audit-venv/bin/python" - <<'PY'
-          import json
-          import urllib.request
+          import asyncio
+          from fastmcp import Client
 
-          def request(url, payload, session=None):
-              req_headers={
-                  "Content-Type": "application/json",
-                  "Accept": "application/json, text/event-stream",
-                  "Mcp-Protocol-Version": "2025-03-26",
-              }
-              if session:
-                  req_headers["Mcp-Session-Id"] = session
-              req = urllib.request.Request(
-                  url, data=json.dumps(payload).encode(), headers=req_headers, method="POST"
-              )
-              try:
-                  with urllib.request.urlopen(req, timeout=90) as response:
-                      return response.status, response.headers, response.read().decode("utf-8", "replace")
-              except urllib.error.HTTPError as error:
-                  body = error.read().decode("utf-8", "replace")
-                  raise RuntimeError(f"HTTP {error.code}: {body}") from error
+          async def main():
+              async with Client("http://127.0.0.1:10002/mcp") as c:
+                  tools = await c.list_tools()
+                  print("BLENDER_TOOLS=" + str(len(tools)))
+                  assert len(tools) >= 80, f"Blender tools: {len(tools)} < 80"
+              async with Client("http://127.0.0.1:10003/mcp") as c:
+                  tools = await c.list_tools()
+                  print("KRITA_TOOLS=" + str(len(tools)))
+                  assert len(tools) >= 15, f"Krita tools: {len(tools)} < 15"
 
-          def result(text):
-              text=text.strip()
-              for line in text.splitlines():
-                  if line.startswith("data: "):
-                      obj=json.loads(line[6:])
-                      if obj.get("result") is not None:
-                          return obj["result"]
-                      if obj.get("error") is not None:
-                          raise RuntimeError(obj["error"])
-              try:
-                  obj=json.loads(text)
-              except json.JSONDecodeError:
-                  raise RuntimeError(f"no MCP JSON-RPC result: {text[:1000]}")
-              if obj.get("result") is not None:
-                  return obj["result"]
-              if obj.get("error") is not None:
-                  raise RuntimeError(obj["error"])
-              raise RuntimeError(f"no MCP JSON-RPC result: {text[:1000]}")
-
-          def inspect(url, label, minimum):
-              status, headers, text = request(url, {
-                  "jsonrpc": "2.0",
-                  "id": 1,
-                  "method": "initialize",
-                  "params": {
-                      "protocolVersion": "2025-03-26",
-                      "capabilities": {},
-                      "clientInfo": {"name": "dcc-catalog-audit", "version": "1"},
-                  },
-              })
-              print(f"{label}_INITIALIZE_STATUS={status}")
-              session=headers.get("Mcp-Session-Id") or headers.get("mcp-session-id")
-              result(text)
-              status, _, text=request(url, {
-                  "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}
-              }, session)
-              print(f"{label}_TOOLS_LIST_STATUS={status}")
-              payload=result(text)
-              names = sorted(t.get("name", "") for t in payload.get("tools", []))
-              print(f"{label}_TOOLS={len(names)}")
-              print(f"{label}_TOOL_NAMES=" + "\n".join(names))
-              assert len(names) >= minimum, f"{label} count {len(names)} < {minimum}"
-
-          inspect("http://127.0.0.1:10002/mcp", "BLENDER", 80)
-          inspect("http://127.0.0.1:10003/mcp", "KRITA", 15)
+          asyncio.run(main())
           PY
