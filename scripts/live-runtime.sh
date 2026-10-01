@@ -106,59 +106,42 @@ start_tunnel() {
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
+  rm -f "$log"
   ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR \
     -o ExitOnForwardFailure=yes \
-    -o ServerAliveInterval=60 \
+    -o ServerAliveInterval=20 \
     -o ServerAliveCountMax=3 \
     -R 80:127.0.0.1:$port \
     nokey@localhost.run > "$log" 2>&1 &
   echo $! > "$RUNNER_TEMP/$name-tunnel.pid"
 }
 
-start_tunnel blender 10000
-start_tunnel krita 10001
+get_tunnel_url() {
+  local name="$1"
+  local log="$RUNNER_TEMP/$name-tunnel.log"
+  grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life|https://[A-Za-z0-9.-]+\.localhost\.run|https://[A-Za-z0-9.-]+\.localhost\.run' "$log" | tail -1 || true
+}
 
-for _ in $(seq 1 90); do
-  B="$(grep 'tunneled with tls termination' "$RUNNER_TEMP/blender-tunnel.log" | grep -Eo 'https://[A-Za-z0-9.-]+' | tail -1 || true)"
-  K="$(grep 'tunneled with tls termination' "$RUNNER_TEMP/krita-tunnel.log" | grep -Eo 'https://[A-Za-z0-9.-]+' | tail -1 || true)"
-  [ -n "$B" ] && [ -n "$K" ] && break
-  kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender-tunnel.log"; exit 1; }
-  kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita-tunnel.log"; exit 1; }
-  sleep 2
-done
+probe_public() {
+  local url="$1"
+  curl -sS -o /dev/null -w '%{http_code}' \
+    --max-time 15 \
+    -X POST "$url/mcp" \
+    -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true
+}
 
-test -n "$B"
-test -n "$K"
+publish_manifests() {
+  local blender_url="$1"
+  local krita_url="$2"
+  export BLENDER_MCP_URL="$blender_url"
+  export KRITA_MCP_URL="$krita_url"
 
-export BLENDER_MCP_URL="$B/mcp"
-export KRITA_MCP_URL="$K/mcp"
-
-S1="$(curl -sS -o "$RUNNER_TEMP/blender-unauth.txt" -w '%{http_code}' \
-  -X POST "$BLENDER_MCP_URL" \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
-S2="$(curl -sS -o "$RUNNER_TEMP/krita-unauth.txt" -w '%{http_code}' \
-  -X POST "$KRITA_MCP_URL" \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' || true)"
-echo "BLENDER_PUBLIC_PROBE_STATUS=$S1"
-echo "KRITA_PUBLIC_PROBE_STATUS=$S2"
-echo "--- BLENDER TUNNEL LOG ---"
-cat "$RUNNER_TEMP/blender-tunnel.log"
-echo "--- KRITA TUNNEL LOG ---"
-cat "$RUNNER_TEMP/krita-tunnel.log"
-echo "BLENDER_PUBLIC_PROBE_BODY=$(tr "\n" " " < "$RUNNER_TEMP/blender-unauth.txt" 2>/dev/null || true)"
-echo "KRITA_PUBLIC_PROBE_BODY=$(tr "\n" " " < "$RUNNER_TEMP/krita-unauth.txt" 2>/dev/null || true)"
-
-test "$S1" = "401"
-test "$S2" = "401"
-
-python3 - <<'PY'
+  python3 - <<'PY'
 import datetime as dt
 import json
 import os
@@ -179,33 +162,100 @@ for provider in ("blender", "krita"):
     )
 PY
 
-echo "=== PUBLISHING LIVE ENDPOINT MANIFESTS ==="
+  BLENDER_FILE_B64="$(base64 -w0 runtime/blender-endpoint.json)"
+  BLENDER_SHA="$(gh api "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/blender-endpoint.json?ref=main" --jq '.sha')"
+  gh api --method PUT "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/blender-endpoint.json" \
+    -f message="chore: refresh live Blender MCP endpoint [skip ci]" \
+    -f content="$BLENDER_FILE_B64" \
+    -f branch="main" \
+    -f sha="$BLENDER_SHA"
 
-BLENDER_FILE_B64="$(base64 -w0 runtime/blender-endpoint.json)"
-BLENDER_SHA="$(gh api "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/blender-endpoint.json?ref=main" --jq '.sha')"
-gh api --method PUT "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/blender-endpoint.json" \
-  -f message="chore: publish live Blender MCP endpoint [skip ci]" \
-  -f content="$BLENDER_FILE_B64" \
-  -f branch="main" \
-  -f sha="$BLENDER_SHA"
+  KRITA_FILE_B64="$(base64 -w0 runtime/krita-endpoint.json)"
+  KRITA_SHA="$(gh api "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/krita-endpoint.json?ref=main" --jq '.sha')"
+  gh api --method PUT "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/krita-endpoint.json" \
+    -f message="chore: refresh live Krita MCP endpoint [skip ci]" \
+    -f content="$KRITA_FILE_B64" \
+    -f branch="main" \
+    -f sha="$KRITA_SHA"
+}
 
-KRITA_FILE_B64="$(base64 -w0 runtime/krita-endpoint.json)"
-KRITA_SHA="$(gh api "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/krita-endpoint.json?ref=main" --jq '.sha')"
-gh api --method PUT "repos/TomasThrawat/Hyouka-DCC-Remote-MCP/contents/runtime/krita-endpoint.json" \
-  -f message="chore: publish live Krita MCP endpoint [skip ci]" \
-  -f content="$KRITA_FILE_B64" \
-  -f branch="main" \
-  -f sha="$KRITA_SHA"
+start_tunnel blender 10000
+start_tunnel krita 10001
+
+for _ in $(seq 1 90); do
+  B="$(get_tunnel_url blender)"
+  K="$(get_tunnel_url krita)"
+  [ -n "$B" ] && [ -n "$K" ] && break
+  kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender-tunnel.log"; exit 1; }
+  kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita-tunnel.log"; exit 1; }
+  sleep 2
+done
+
+test -n "$B"
+test -n "$K"
+
+B_STATUS="$(probe_public "$B")"
+K_STATUS="$(probe_public "$K")"
+echo "BLENDER_PUBLIC_PROBE_STATUS=$B_STATUS"
+echo "KRITA_PUBLIC_PROBE_STATUS=$K_STATUS"
+
+test "$B_STATUS" = "401"
+test "$K_STATUS" = "401"
+
+publish_manifests "$B" "$K"
 
 echo "=== DCC RUNTIME READY ==="
-
-echo "BLENDER_MCP_URL=$BLENDER_MCP_URL"
-echo "KRITA_MCP_URL=$KRITA_MCP_URL"
+echo "BLENDER_MCP_URL=$B/mcp"
+echo "KRITA_MCP_URL=$K/mcp"
 
 while true; do
+  blender_ok=1
+  krita_ok=1
+
+  B_STATUS="$(probe_public "$B")"
+  K_STATUS="$(probe_public "$K")"
+
+  if [ "$B_STATUS" != "401" ]; then
+    blender_ok=0
+  fi
+  if [ "$K_STATUS" != "401" ]; then
+    krita_ok=0
+  fi
+
+  if [ "$blender_ok" -eq 0 ] || ! kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null; then
+    echo "BLENDER_TUNNEL_RESTART status=$B_STATUS"
+    kill "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || true
+    start_tunnel blender 10000
+    for _ in $(seq 1 60); do
+      B="$(get_tunnel_url blender)"
+      [ -n "$B" ] && [ "$(probe_public "$B")" = "401" ] && break
+      sleep 2
+    done
+  fi
+
+  if [ "$krita_ok" -eq 0 ] || ! kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null; then
+    echo "KRITA_TUNNEL_RESTART status=$K_STATUS"
+    kill "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || true
+    start_tunnel krita 10001
+    for _ in $(seq 1 60); do
+      K="$(get_tunnel_url krita)"
+      [ -n "$K" ] && [ "$(probe_public "$K")" = "401" ] && break
+      sleep 2
+    done
+  fi
+
+  if [ "$(probe_public "$B")" = "401" ] && [ "$(probe_public "$K")" = "401" ]; then
+    if [ "$B" != "${LAST_B:-}" ] || [ "$K" != "${LAST_K:-}" ]; then
+      publish_manifests "$B/mcp" "$K/mcp"
+      LAST_B="$B"
+      LAST_K="$K"
+      echo "LIVE_ENDPOINTS_REFRESHED"
+    fi
+  else
+    echo "PUBLIC_PROBE_NOT_READY blender=$(probe_public "$B") krita=$(probe_public "$K")"
+  fi
+
   kill -0 "$(cat "$RUNNER_TEMP/blender.pid")" 2>/dev/null || exit 1
   kill -0 "$(cat "$RUNNER_TEMP/krita.pid")" 2>/dev/null || exit 1
-  kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || exit 1
-  kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || exit 1
   sleep 30
 done
