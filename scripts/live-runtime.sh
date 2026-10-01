@@ -117,15 +117,21 @@ grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log"
 import asyncio
 from fastmcp import Client
 
+async def list_with_timeout(url: str, label: str, minimum: int):
+    async with Client(url) as client:
+        tools = await asyncio.wait_for(client.list_tools(), timeout=90)
+    count = len(tools)
+    print(f"{label}_TOOLS={count}", flush=True)
+    assert count >= minimum, f"{label} tool coverage too small: {count}"
+    print(
+        f"{label}_TOOL_NAMES_SAMPLE="
+        + str(sorted(getattr(tool, "name", "") for tool in tools)[:25]),
+        flush=True,
+    )
+
 async def main():
-    async with Client("http://127.0.0.1:10002/mcp") as c:
-        tools = await c.list_tools()
-        print("BLENDER_TOOLS=" + str(len(tools)))
-        assert len(tools) >= 200, f"Blender tool coverage too small: {len(tools)}"
-    async with Client("http://127.0.0.1:10003/mcp") as c:
-        tools = await c.list_tools()
-        print("KRITA_TOOLS=" + str(len(tools)))
-        assert len(tools) >= 16, f"Krita tool coverage too small: {len(tools)}"
+    await list_with_timeout("http://127.0.0.1:10002/mcp", "BLENDER", 200)
+    await list_with_timeout("http://127.0.0.1:10003/mcp", "KRITA", 16)
 
 asyncio.run(main())
 PY
@@ -146,11 +152,6 @@ get_tunnel_url() {
   grep -Eo 'https://[A-Za-z0-9.-]+\.(a\.pinggy\.link|pinggy-free\.link|free\.pinggy\.net|lhr\.life|localhost\.run)' "$log" | tail -1 || true
 }
 
- {
-  local name="$1"
-  local log="$RUNNER_TEMP/$name-tunnel.log"
-  grep -Eo 'https://[A-Za-z0-9.-]+\.lhr\.life|https://[A-Za-z0-9.-]+\.localhost\.run|https://[A-Za-z0-9.-]+\.localhost\.run' "$log" | tail -1 || true
-}
 
 probe_public() {
   local url="$1"
