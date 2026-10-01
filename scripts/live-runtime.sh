@@ -87,6 +87,42 @@ PY
 
 export DCC_MCP_KRITA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kritarc"
 
+# Krita scans system resource locations on some distro builds. Mirror the
+# receipt-managed plugin there as a deterministic fallback without changing
+# the authenticated bridge/runtime code.
+python3 - <<'PY'
+from pathlib import Path
+import os
+import shutil
+
+data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+user_root = data_root / "krita" / "pykrita"
+system_root = Path("/usr/share/krita/pykrita")
+system_root.mkdir(parents=True, exist_ok=True)
+
+module = user_root / "dcc_mcp_krita"
+desktop = user_root / "dcc_mcp_krita.desktop"
+if not module.is_dir() or not desktop.is_file():
+    raise RuntimeError(f"Krita plugin install missing under {user_root}")
+
+shutil.copytree(module, system_root / module.name, dirs_exist_ok=True)
+shutil.copy2(desktop, system_root / desktop.name)
+text = (system_root / desktop.name).read_text(encoding="utf-8")
+if "X-KDE-Library=dcc_mcp_krita" not in text:
+    lines = []
+    inserted = False
+    for line in text.splitlines():
+        lines.append(line)
+        if line == "X-KDE-ServiceTypes=Krita/PythonPlugin":
+            lines.append("X-KDE-Library=dcc_mcp_krita")
+            inserted = True
+    if not inserted:
+        raise RuntimeError("System Krita desktop file missing X-KDE-ServiceTypes")
+    (system_root / desktop.name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+print("KRITA_SYSTEM_PLUGIN=/usr/share/krita/pykrita/dcc_mcp_krita")
+PY
+
 
 python3 - <<'PY'
 from pathlib import Path
