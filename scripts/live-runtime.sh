@@ -60,6 +60,28 @@ print("KRITA_INSTALL_DESTINATION=" + str(install()))
 PY
 
 python3 - <<'PY'
+from pathlib import Path
+import os
+
+root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+desktop = root / "krita" / "pykrita" / "dcc_mcp_krita.desktop"
+text = desktop.read_text(encoding="utf-8")
+if "X-KDE-Library=" in text:
+    lines = [
+        ("X-KDE-Library=dcc_mcp_krita" if line.startswith("X-KDE-Library=") else line)
+        for line in text.splitlines()
+    ]
+    text = "\n".join(lines) + "\n"
+else:
+    marker = "X-KDE-ServiceTypes=Krita/PythonPlugin"
+    if marker not in text:
+        raise RuntimeError("Krita plugin desktop metadata missing X-KDE-ServiceTypes")
+    text = text.replace(marker, marker + "\nX-KDE-Library=dcc_mcp_krita", 1) 
+desktop.write_text(text, encoding="utf-8")
+print("KRITA_PLUGIN_DESKTOP_MODULE=dcc_mcp_krita")
+PY
+
+python3 - <<'PY'
 from configparser import ConfigParser
 from pathlib import Path
 import os
