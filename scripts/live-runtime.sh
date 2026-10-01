@@ -106,13 +106,14 @@ start_tunnel() {
   local name="$1"
   local port="$2"
   local log="$RUNNER_TEMP/$name-tunnel.log"
-  ssh -T -N \
+  ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
+    -o LogLevel=ERROR \
     -o ExitOnForwardFailure=yes \
-    -o ServerAliveInterval=30 \
+    -o ServerAliveInterval=60 \
     -o ServerAliveCountMax=3 \
-    -R 80:localhost:$port \
+    -R 80:127.0.0.1:$port \
     nokey@localhost.run > "$log" 2>&1 &
   echo $! > "$RUNNER_TEMP/$name-tunnel.pid"
 }
@@ -121,8 +122,8 @@ start_tunnel blender 10000
 start_tunnel krita 10001
 
 for _ in $(seq 1 90); do
-  B="$(grep -Eo 'https://[A-Za-z0-9.-]+' "$RUNNER_TEMP/blender-tunnel.log" | head -1 || true)"
-  K="$(grep -Eo 'https://[A-Za-z0-9.-]+' "$RUNNER_TEMP/krita-tunnel.log" | head -1 || true)"
+  B="$(grep 'tunneled with tls termination' "$RUNNER_TEMP/blender-tunnel.log" | grep -Eo 'https://[A-Za-z0-9.-]+' | tail -1 || true)"
+  K="$(grep 'tunneled with tls termination' "$RUNNER_TEMP/krita-tunnel.log" | grep -Eo 'https://[A-Za-z0-9.-]+' | tail -1 || true)"
   [ -n "$B" ] && [ -n "$K" ] && break
   kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/blender-tunnel.log"; exit 1; }
   kill -0 "$(cat "$RUNNER_TEMP/krita-tunnel.pid")" 2>/dev/null || { cat "$RUNNER_TEMP/krita-tunnel.log"; exit 1; }
