@@ -12,7 +12,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: Runtime smoke marker
@@ -21,8 +21,8 @@ jobs:
       - name: Install system dependencies
         run: |
           set -Eeuo pipefail
-          timeout 300s sudo apt-get update
-          timeout 600s sudo apt-get install -y --no-install-recommends             ca-certificates curl python3-venv python3-pip xz-utils xvfb dbus-x11             krita python3-pyqt5 x11-xkb-utils             libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0             libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3             libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0             libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1             libxkbcommon-x11-0 libegl1 fonts-dejavu
+          timeout 600s sudo apt-get update -o Acquire::Retries=5
+          timeout 1200s sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o DPkg::Lock::Timeout=120             ca-certificates curl python3-venv python3-pip xz-utils xvfb dbus-x11             krita python3-pyqt5 x11-xkb-utils             libx11-6 libxrender1 libxi6 libxfixes3 libxxf86vm1 libxkbcommon0             libgl1 libglu1-mesa libsm6 libice6 libdbus-1-3             libxcb-xinerama0 libxcb-cursor0 libxcb-keysyms1 libxcb-render-util0             libxcb-shape0 libxcb-randr0 libxcb-image0 libxcb-util1             libxkbcommon-x11-0 libegl1 fonts-dejavu
           sudo rm -rf /var/lib/apt/lists/*
 
       - name: Install Python providers
