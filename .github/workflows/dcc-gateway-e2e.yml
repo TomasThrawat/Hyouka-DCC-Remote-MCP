@@ -106,21 +106,55 @@ jobs:
               "name": "godot_mcp_inventory",
               "arguments": {},
           })
-          texts = [c.get("text", "") for c in inv.get("content", [])]
+          texts = [c.get("text", "") for c in inv.get("content", []) if c.get("text")]
           inventory_text = "\n".join(texts)
           print("GODOT_MCP_INVENTORY=" + inventory_text)
+          inventory = json.loads(texts[0])
 
-          blender_status = rpc("tools/call", 4, {
+          assert inventory["godotToolCount"] >= 130, inventory["godotToolCount"]
+          providers = {
+              item["id"]: item for item in inventory["remoteMcp"]["providers"]
+          }
+
+          assert providers["blender-mcp"]["connected"] is True
+          assert providers["blender-mcp"]["toolCount"] >= 89
+          assert providers["krita-mcp"]["connected"] is True
+          assert providers["krita-mcp"]["toolCount"] >= 61
+          assert providers["assetmcp-vercel"]["connected"] is True
+          assert providers["assetmcp-vercel"]["toolCount"] >= 36
+
+          print("UNIFIED_CORE_COUNTS=" + json.dumps({
+              "godot": inventory["godotToolCount"],
+              "blender": providers["blender-mcp"]["toolCount"],
+              "krita": providers["krita-mcp"]["toolCount"],
+              "assetmcp": providers["assetmcp-vercel"]["toolCount"],
+          }, sort_keys=True))
+
+          godot_status = rpc("tools/call", 4, {
+              "name": "godot_status",
+              "arguments": {},
+          })
+          print("GODOT_STATUS=" + json.dumps(godot_status))
+          assert any(c.get("text") for c in godot_status.get("content", []))
+
+          blender_status = rpc("tools/call", 5, {
               "name": "mcp_blender-mcp__dcc_diagnostics__process_status",
               "arguments": {},
           })
           print("BLENDER_PROCESS_STATUS=" + json.dumps(blender_status))
           assert any(c.get("text") for c in blender_status.get("content", []))
 
-          krita_status = rpc("tools/call", 5, {
+          krita_status = rpc("tools/call", 6, {
               "name": "mcp_krita-mcp__dcc_diagnostics__process_status",
               "arguments": {},
           })
           print("KRITA_PROCESS_STATUS=" + json.dumps(krita_status))
           assert any(c.get("text") for c in krita_status.get("content", []))
+
+          asset_status = rpc("tools/call", 7, {
+              "name": "mcp_assetmcp-vercel__library_info",
+              "arguments": {},
+          })
+          print("ASSETMCP_LIBRARY_INFO=" + json.dumps(asset_status))
+          assert any(c.get("text") for c in asset_status.get("content", []))
           PY
