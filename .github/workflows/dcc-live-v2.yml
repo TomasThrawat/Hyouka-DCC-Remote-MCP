@@ -87,7 +87,10 @@ jobs:
                   raise RuntimeError("Krita plugin desktop metadata missing X-KDE-ServiceTypes")
               idx = lines.index(marker) + 1
               lines.insert(idx, "X-KDE-Library=dcc_mcp_krita")
-          (system_root / desktop.name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          rendered = Path("$RUNNER_TEMP/dcc_mcp_krita.desktop")
+          rendered.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          subprocess.run(["sudo", "cp", "-f", str(rendered), str(system_root / desktop.name)], check=True)
+
           print("KRITA_SYSTEM_PLUGIN=/usr/share/krita/pykrita/dcc_mcp_krita")
           PY
 
