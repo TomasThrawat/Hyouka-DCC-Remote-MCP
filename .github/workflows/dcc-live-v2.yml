@@ -95,7 +95,10 @@ jobs:
           required = ("desktop", "init", "runtime")
           if not all(result.get("files", {}).get(name) for name in required):
               raise RuntimeError("Krita plugin files failed installer verification")
-          if not result.get("plugin_enabled"):
+          config_text = (Path.home() / ".config" / "kritarc").read_text(encoding="utf-8").splitlines()
+          enabled = any(line.strip().replace(" ", "") == "enable_dcc_mcp_krita=true" for line in config_text)
+          print("KRITA_PLUGIN_CONFIG_ENABLED=" + str(enabled).lower())
+          if not enabled:
               raise RuntimeError("Krita plugin is not enabled in kritarc")
           PY
 
