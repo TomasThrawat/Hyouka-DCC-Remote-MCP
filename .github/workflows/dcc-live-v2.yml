@@ -32,7 +32,7 @@ jobs:
           set -euxo pipefail
           python3 -m venv "$RUNNER_TEMP/dcc-venv"
           "$RUNNER_TEMP/dcc-venv/bin/pip" install --upgrade pip
-          "$RUNNER_TEMP/dcc-venv/bin/pip" install             "fastmcp>=2,<4" "httpx>=0.27,<1"             "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"
+          "$RUNNER_TEMP/dcc-venv/bin/pip" install             "fastmcp>=2,<4" "httpx>=0.27,<1"             "aiohttp>=3.11,<4" "PyJWT[crypto]>=2.9,<3"             "dcc-mcp-krita==0.3.0"
           mkdir -p "$RUNNER_TEMP/dcc-python"
           "$RUNNER_TEMP/dcc-venv/bin/python" -m pip install             --target "$RUNNER_TEMP/dcc-python"             "dcc-mcp-blender==0.2.9"
 
@@ -172,7 +172,8 @@ jobs:
                       "updatedAt": now.isoformat(),
                       "expiresAt": expires.isoformat(),
                       "provider": provider + "-mcp"
-                  }, indent=2) + "\n",
+                  }, indent=2) + "
+",
                   encoding="utf-8",
               )
           PY
