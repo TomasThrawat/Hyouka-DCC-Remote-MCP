@@ -48,69 +48,40 @@ jobs:
         run: |
           set -euxo pipefail
           export DCC_MCP_KRITA_ALLOWED_ROOTS="$GITHUB_WORKSPACE"
+
           "$RUNNER_TEMP/dcc-venv/bin/python" - <<'PY'
-          from dcc_mcp_krita.install import install
-          print("KRITA_INSTALL_DESTINATION=" + str(install()))
-          PY
-
-          python3 - <<'PY'
+          import json
           from pathlib import Path
-          import os
-          import subprocess
+          from dcc_mcp_krita.install import install, doctor
 
-          data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-          user_root = data_root / "krita" / "pykrita"
-          system_root = Path("/usr/share/krita/pykrita")
-          system_root.mkdir(parents=True, exist_ok=True)
+          destination = install()
+          print("KRITA_INSTALL_DESTINATION=" + str(destination))
 
-          module = user_root / "dcc_mcp_krita"
-          desktop = user_root / "dcc_mcp_krita.desktop"
-          if not module.is_dir() or not desktop.is_file():
-              raise RuntimeError(f"Krita plugin install missing under {user_root}")
-
-          subprocess.run(["sudo", "cp", "-a", str(module), str(system_root / module.name)], check=True)
-          subprocess.run(["sudo", "cp", "-f", str(desktop), str(system_root / desktop.name)], check=True)
-
-          text = (system_root / desktop.name).read_text(encoding="utf-8")
-          lines = []
-          seen = False
-          for line in text.splitlines():
+          desktop = Path(destination) / "dcc_mcp_krita.desktop"
+          lines = desktop.read_text(encoding="utf-8").splitlines()
+          normalized = []
+          seen_library = False
+          for line in lines:
               if line.startswith("X-KDE-Library="):
-                  if not seen:
-                      lines.append("X-KDE-Library=dcc_mcp_krita")
-                      seen = True
+                  if not seen_library:
+                      normalized.append("X-KDE-Library=dcc_mcp_krita")
+                      seen_library = True
                   continue
-              lines.append(line)
-          if not seen:
+              normalized.append(line)
+          if not seen_library:
               marker = "X-KDE-ServiceTypes=Krita/PythonPlugin"
-              if marker not in lines:
-                  raise RuntimeError("Krita plugin desktop metadata missing X-KDE-ServiceTypes")
-              idx = lines.index(marker) + 1
-              lines.insert(idx, "X-KDE-Library=dcc_mcp_krita")
-          rendered = Path(os.environ["RUNNER_TEMP"]) / "dcc_mcp_krita.desktop"
-          rendered.write_text("\n".join(lines) + "\n", encoding="utf-8")
-          subprocess.run(["sudo", "cp", "-f", str(rendered), str(system_root / desktop.name)], check=True)
+              if marker not in normalized:
+                  raise RuntimeError("Krita plugin desktop manifest is missing X-KDE-ServiceTypes")
+              normalized.insert(normalized.index(marker) + 1, "X-KDE-Library=dcc_mcp_krita")
+          desktop.write_text("\n".join(normalized) + "\n", encoding="utf-8")
 
-          print("KRITA_SYSTEM_PLUGIN=/usr/share/krita/pykrita/dcc_mcp_krita")
-          PY
-
-          python3 - <<'PY'
-          from configparser import ConfigParser
-          from pathlib import Path
-          import os
-
-          path = Path(os.environ.get("DCC_MCP_KRITA_CONFIG", Path.home() / ".config" / "kritarc"))
-          path.parent.mkdir(parents=True, exist_ok=True)
-          parser = ConfigParser(interpolation=None)
-          parser.optionxform = str
-          if path.is_file():
-              parser.read(path, encoding="utf-8")
-          if not parser.has_section("python"):
-              parser.add_section("python")
-          parser.set("python", "enable_dcc_mcp_krita", "true")
-          with path.open("w", encoding="utf-8") as stream:
-              parser.write(stream)
-          print("KRITA_PLUGIN_ENABLED=true")
+          result = doctor()
+          print("KRITA_DOCTOR=" + json.dumps(result, sort_keys=True))
+          required = ("desktop", "init", "runtime")
+          if not all(result.get("files", {}).get(name) for name in required):
+              raise RuntimeError("Krita plugin files failed installer verification")
+          if not result.get("plugin_enabled"):
+              raise RuntimeError("Krita plugin is not enabled in kritarc")
           PY
 
       - name: Start Blender
