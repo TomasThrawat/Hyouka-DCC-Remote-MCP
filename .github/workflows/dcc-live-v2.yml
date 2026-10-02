@@ -166,18 +166,32 @@ jobs:
           asyncio.run(main())
           PY
 
+      - name: Install cloudflared
+        run: |
+          set -euo pipefail
+          arch="$(dpkg --print-architecture)"
+          case "$arch" in
+            amd64) pkg="cloudflared-linux-amd64.deb" ;;
+            arm64) pkg="cloudflared-linux-arm64.deb" ;;
+            *) echo "Unsupported runner architecture: $arch" >&2; exit 1 ;;
+          esac
+          curl -fL --retry 5 --retry-all-errors             "https://github.com/cloudflare/cloudflared/releases/latest/download/$pkg"             -o "$RUNNER_TEMP/cloudflared.deb"
+          sudo dpkg -i "$RUNNER_TEMP/cloudflared.deb"
+          cloudflared --version
+
       - name: Create public HTTPS tunnels
         run: |
           set -euo pipefail
-          ssh -T -N             -o StrictHostKeyChecking=no             -o UserKnownHostsFile=/dev/null             -o ExitOnForwardFailure=yes             -o ServerAliveInterval=30             -o ServerAliveCountMax=3             -R 80:localhost:10000             nokey@localhost.run             > "$RUNNER_TEMP/blender-tunnel.log" 2>&1 &
+
+          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:10000             > "$RUNNER_TEMP/blender-tunnel.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/blender-tunnel.pid"
 
-          ssh -T -N             -o StrictHostKeyChecking=no             -o UserKnownHostsFile=/dev/null             -o ExitOnForwardFailure=yes             -o ServerAliveInterval=30             -o ServerAliveCountMax=3             -R 80:localhost:10001             nokey@localhost.run             > "$RUNNER_TEMP/krita-tunnel.log" 2>&1 &
+          cloudflared tunnel --no-autoupdate --url http://127.0.0.1:10001             > "$RUNNER_TEMP/krita-tunnel.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/krita-tunnel.pid"
 
           for _ in $(seq 1 90); do
-            B="$(grep -Eo 'https://[A-Za-z0-9.-]+' "$RUNNER_TEMP/blender-tunnel.log" | head -1 || true)"
-            K="$(grep -Eo 'https://[A-Za-z0-9.-]+' "$RUNNER_TEMP/krita-tunnel.log" | head -1 || true)"
+            B="$(grep -Eo 'https://[a-z0-9-]+.trycloudflare.com' "$RUNNER_TEMP/blender-tunnel.log" | head -1 || true)"
+            K="$(grep -Eo 'https://[a-z0-9-]+.trycloudflare.com' "$RUNNER_TEMP/krita-tunnel.log" | head -1 || true)"
             if [ -n "$B" ] && [ -n "$K" ]; then break; fi
             kill -0 "$(cat "$RUNNER_TEMP/blender-tunnel.pid")" 2>/dev/null || {
               cat "$RUNNER_TEMP/blender-tunnel.log"
@@ -192,6 +206,7 @@ jobs:
 
           test -n "$B"
           test -n "$K"
+          test "$B" != "$K"
           echo "BLENDER_MCP_URL=$B/mcp" >> "$GITHUB_ENV"
           echo "KRITA_MCP_URL=$K/mcp" >> "$GITHUB_ENV"
 
