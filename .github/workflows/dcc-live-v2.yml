@@ -75,6 +75,21 @@ jobs:
               normalized.insert(normalized.index(marker) + 1, "X-KDE-Library=dcc_mcp_krita")
           desktop.write_text("\n".join(normalized) + "\n", encoding="utf-8")
 
+          import configparser
+
+          config_path = Path.home() / ".config" / "kritarc"
+          config_path.parent.mkdir(parents=True, exist_ok=True)
+          parser = configparser.ConfigParser(interpolation=None)
+          parser.optionxform = str
+          if config_path.is_file():
+              parser.read(config_path, encoding="utf-8")
+          if not parser.has_section("python"):
+              parser.add_section("python")
+          parser.set("python", "enable_dcc_mcp_krita", "true")
+          with config_path.open("w", encoding="utf-8") as stream:
+              parser.write(stream)
+          print("KRITA_PLUGIN_ENABLED=true")
+
           result = doctor()
           print("KRITA_DOCTOR=" + json.dumps(result, sort_keys=True))
           required = ("desktop", "init", "runtime")
