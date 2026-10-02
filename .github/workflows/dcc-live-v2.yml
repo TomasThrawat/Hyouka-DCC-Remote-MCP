@@ -61,18 +61,23 @@ jobs:
           lines = desktop.read_text(encoding="utf-8").splitlines()
           normalized = []
           seen_library = False
+          seen_service_types = False
           for line in lines:
+              if line.startswith("ServiceTypes=") or line.startswith("X-KDE-ServiceTypes="):
+                  if not seen_service_types:
+                      normalized.append("ServiceTypes=Krita/PythonPlugin")
+                      seen_service_types = True
+                  continue
               if line.startswith("X-KDE-Library="):
                   if not seen_library:
                       normalized.append("X-KDE-Library=dcc_mcp_krita")
                       seen_library = True
                   continue
               normalized.append(line)
+          if not seen_service_types:
+              normalized.insert(1 if normalized else 0, "ServiceTypes=Krita/PythonPlugin")
           if not seen_library:
-              marker = "X-KDE-ServiceTypes=Krita/PythonPlugin"
-              if marker not in normalized:
-                  raise RuntimeError("Krita plugin desktop manifest is missing X-KDE-ServiceTypes")
-              normalized.insert(normalized.index(marker) + 1, "X-KDE-Library=dcc_mcp_krita")
+              normalized.insert(2 if len(normalized) >= 2 else len(normalized), "X-KDE-Library=dcc_mcp_krita")
           desktop.write_text("\n".join(normalized) + "\n", encoding="utf-8")
 
           import configparser
