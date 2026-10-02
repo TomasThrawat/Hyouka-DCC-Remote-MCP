@@ -172,8 +172,7 @@ jobs:
                       "updatedAt": now.isoformat(),
                       "expiresAt": expires.isoformat(),
                       "provider": provider + "-mcp"
-                  }, indent=2) + "
-",
+                  }, indent=2) + "\n",
                   encoding="utf-8",
               )
           PY
