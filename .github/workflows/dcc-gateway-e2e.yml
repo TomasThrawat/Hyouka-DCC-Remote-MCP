@@ -98,12 +98,6 @@ jobs:
           print(f"BLENDER_GATEWAY_TOOLS={len(blender)}")
           print(f"KRITA_GATEWAY_TOOLS={len(krita)}")
 
-          diagnostic = rpc("tools/call", 99, {
-              "name": "godot_mcp_inventory",
-              "arguments": {},
-          })
-          print("GATEWAY_REMOTE_INVENTORY=" + json.dumps(diagnostic, indent=2))
-
           assert len(blender) >= 89, len(blender)
           assert len(krita) >= 61, len(krita)
           assert len(tools) >= len(blender) + len(krita)
