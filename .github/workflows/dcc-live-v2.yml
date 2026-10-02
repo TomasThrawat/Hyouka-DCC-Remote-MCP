@@ -52,9 +52,9 @@ jobs:
           curl -fL --retry 5 --retry-all-errors             "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp/__init__.py"             -o "$HOME/.local/share/krita/pykrita/kritamcp/__init__.py"
           curl -fL --retry 5 --retry-all-errors             "https://raw.githubusercontent.com/nanayax3/krita-mcp/$REF/krita-plugin/kritamcp.desktop"             -o "$HOME/.local/share/krita/pykrita/kritamcp.desktop"
           cat > "$HOME/.config/kritarc" <<'EOF'
-[python]
-enable_kritamcp=true
-EOF
+          [python]
+          enable_kritamcp=true
+          EOF
 
       - name: Start Blender
         run: |
