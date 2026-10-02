@@ -82,7 +82,7 @@ jobs:
           export PORT=10001
           export DCC_MCP_INNER_PORT=10003
           export DCC_PROXY_PYTHON="$RUNNER_TEMP/dcc-venv/bin/python"
-          python3 "$GITHUB_WORKSPACE/krita/entrypoint.py"             > "$RUNNER_TEMP/krita.log" 2>&1 &
+          "$RUNNER_TEMP/dcc-venv/bin/python" "$GITHUB_WORKSPACE/krita/entrypoint.py"             > "$RUNNER_TEMP/krita.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/krita.pid"
           for _ in $(seq 1 150); do
             grep -q 'KRITA_MCP_URL=' "$RUNNER_TEMP/krita.log" && break
